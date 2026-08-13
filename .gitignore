@@ -1,0 +1,10 @@
+.venv/
+.env
+*.local.env
+config.local.json
+logs/
+*.log
+*.log.err
+__pycache__/
+*.pyc
+

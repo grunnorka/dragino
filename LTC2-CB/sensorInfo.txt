@@ -1,0 +1,2 @@
+Type: LTC2-CB
+AT PIN: 358613
