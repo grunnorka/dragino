@@ -12,6 +12,7 @@ Two NB-IoT / LTE-M sensor nodes plus shared UART/MQTT tooling.
 ```text
 shared/          UART monitor, Railway MQTT helpers, PPK2 power
 mqtt/            Mosquitto + TCP-1883 Docker for Railway
+dashboard/       Fleet UI + MQTT→Postgres ingest (Railway web/ingest)
 docs/            Living AT / broker / telemetry notes
 PS-CB-NA/        Analog node (firmware, manuals, scripts)
 LTC2-CB/         Temp node (firmware, manuals, scripts)
@@ -58,6 +59,10 @@ python shared/monitor.py --list-ports
 python shared/mqtt_smoke_railway.py
 python shared/mqtt_listen_railway.py   # broker-only (no COM)
 python shared/railway_mqtt.py --at --device-id ps-cb --use-ip
+
+# Fleet dashboard (DATABASE_URL + BASIC_AUTH_PASSWORD; see dashboard/README.md)
+PYTHONPATH=. python -m dashboard.ingest
+PYTHONPATH=. uvicorn dashboard.web:app --port 8000
 ```
 
 **Session exit codes:** `0` success · `2` unlock/modem blocked · `3` radio fail · `4` broker down · `5` usage/PIN.
@@ -90,7 +95,8 @@ Device-specific notes: [PS-CB-NA/README.md](PS-CB-NA/README.md), [LTC2-CB/README
 |---|---|
 | [PS-CB-NA/SETUP.md](PS-CB-NA/SETUP.md) | PS-CB-NA Railway MQTT setup playbook (LLM/operator) |
 | [docs/AT_COMMANDS_HANDOFF.md](docs/AT_COMMANDS_HANDOFF.md) | PS-CB-NA MQTT / ThingsBoard AT sequence |
-| [docs/RAILWAY_MQTT.md](docs/RAILWAY_MQTT.md) | Self-hosted Mosquitto on Railway |
+| [docs/RAILWAY_MQTT.md](docs/RAILWAY_MQTT.md) | Self-hosted Mosquitto on Railway + dashboard services |
+| [dashboard/README.md](dashboard/README.md) | Fleet UI + ingest env / deploy notes |
 | [docs/HIVEMQ_BROKER_SWITCH.md](docs/HIVEMQ_BROKER_SWITCH.md) | Why SERVADDR jumps to HiveMQ |
 | [docs/TELEMETRY_8_SLOTS.md](docs/TELEMETRY_8_SLOTS.md) | CLOCKLOG / 8-slot history |
 

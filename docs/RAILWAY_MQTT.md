@@ -32,6 +32,8 @@ Railway **TCP Proxy cannot bind public port 1883** (or any chosen public port). 
 | Path | Role |
 |------|------|
 | [`../mqtt/mosquitto/`](../mqtt/mosquitto/) | Dockerfile + entrypoint deployed to Railway |
+| [`../dashboard/`](../dashboard/) | Fleet UI + MQTT ingest (Postgres) |
+| [`../dashboard/railway_wire.sh`](../dashboard/railway_wire.sh) | CLI helper to create ingest/web vars |
 | [`../shared/railway_mqtt.py`](../shared/railway_mqtt.py) | Shared settings + print Dragino AT set |
 | [`../shared/mqtt_smoke_railway.py`](../shared/mqtt_smoke_railway.py) | Pub/sub round-trip smoke test |
 | [`../shared/mqtt_listen_railway.py`](../shared/mqtt_listen_railway.py) | Subscribe `dragino/#` |
@@ -82,3 +84,69 @@ railway up --detach
 Or from repo root via MCP/CLI deploy of the `mqtt/mosquitto/` directory to service `mqtt`.
 
 Optional: attach a Railway volume at `/mosquitto/data` for persistence (passwordfile + retained state). Broker runs fine without it.
+
+## Dashboard (ingest + web)
+
+Read-only fleet UI + MQTT→Postgres ingest live in the same project. Code: [`../dashboard/`](../dashboard/).
+
+| Service | Image | `SERVICE_MODE` | Notes |
+|---------|-------|----------------|-------|
+| `Postgres` | Railway plugin | — | Provides `DATABASE_URL` |
+| `ingest` | `dashboard/` Dockerfile | `ingest` | Private MQTT `mqtt.railway.internal:1883` |
+| `web` | `dashboard/` Dockerfile | `web` | Public HTTPS + HTTP Basic Auth |
+
+### One-time Railway wiring
+
+```bash
+# From a machine with `railway login` against project dragino-mqtt
+cd dashboard
+railway link --project 6275a0e4-fa40-4b5b-ae8c-67180378148e --environment production
+
+# Add managed Postgres (once)
+railway add --database postgres
+
+# Create empty services, then deploy this directory to each
+railway add --service ingest
+railway add --service web
+
+# Shared / service variables (set MQTT_PASS / BASIC_AUTH_PASSWORD to real secrets)
+railway variables --service ingest \
+  --set "SERVICE_MODE=ingest" \
+  --set "MQTT_HOST=mqtt.railway.internal" \
+  --set "MQTT_PORT=1883" \
+  --set "MQTT_USER=dragino" \
+  --set "MQTT_PASS=<MQTT_PASS>" \
+  --set "DEVICE_IDS=ps-cb,ltc2" \
+  --set "STALE_AFTER_HOURS=24"
+
+railway variables --service web \
+  --set "SERVICE_MODE=web" \
+  --set "BASIC_AUTH_USER=admin" \
+  --set "BASIC_AUTH_PASSWORD=<DASHBOARD_PASSWORD>" \
+  --set "DEVICE_IDS=ps-cb,ltc2" \
+  --set "STALE_AFTER_HOURS=24" \
+  --set "MESSAGES_PER_DEVICE=50" \
+  --set "REFRESH_SECONDS=60"
+
+# Reference DATABASE_URL from the Postgres plugin into ingest + web
+# (Railway UI: Variable → Add reference → Postgres.DATABASE_URL)
+# or: railway variables --service ingest --set "DATABASE_URL=${{Postgres.DATABASE_URL}}"
+
+railway up --service ingest --detach
+railway up --service web --detach
+railway domain --service web   # generate public HTTPS hostname
+```
+
+Ingest must **not** use the public TCP proxy; web never opens MQTT. Ops UX / downlinks are out of v1.
+
+### Local smoke
+
+```bash
+export DATABASE_URL=postgresql://dragino:dragino@127.0.0.1:5432/dragino
+export BASIC_AUTH_PASSWORD=devpass
+export MQTT_HOST=altaria.proxy.rlwy.net MQTT_PORT=33239
+export MQTT_USER=dragino MQTT_PASS=<MQTT_PASS>
+pip install -r dashboard/requirements.txt
+PYTHONPATH=. python -m dashboard.ingest
+PYTHONPATH=. uvicorn dashboard.web:app --port 8000
+```

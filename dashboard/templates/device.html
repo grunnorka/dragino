@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="{{ refresh_seconds }}">
+  <title>{{ device.id }} · Dragino</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #8b98a5;
+      --ok: #3d9a5f;
+      --stale: #c48a2a;
+      --never: #8a4b4b;
+      --line: #2a3542;
+      --accent: #5b8def;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 90% -10%, #1c2a3a 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-size: 1.6rem; font-weight: 600; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); margin: 0 0 1.25rem; font-size: 0.95rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .meta { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin-bottom: 1.5rem; color: var(--muted); font-size: 0.92rem; }
+    .meta strong { color: var(--text); font-weight: 600; }
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .ok { background: color-mix(in srgb, var(--ok) 25%, transparent); color: #9be0b3; }
+    .stale { background: color-mix(in srgb, var(--stale) 25%, transparent); color: #f0d08a; }
+    .never-seen { background: color-mix(in srgb, var(--never) 30%, transparent); color: #efb0b0; }
+    article {
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    article header {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+      color: var(--muted); font-size: 0.85rem; margin-bottom: 0.65rem;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: #d5dde6;
+    }
+    .empty { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">← Fleet</a></p>
+    <h1>{{ device.id }}</h1>
+    <p class="sub">
+      <span class="pill {{ status }}">{{ status }}</span>
+      · last {{ limit }} uplinks · refresh {{ refresh_seconds }}s · {{ now|fmt_dt }}
+    </p>
+    <div class="meta">
+      <div>Created via <strong>{{ device.created_via }}</strong></div>
+      <div>First seen <strong>{{ device.first_seen_at|fmt_dt }}</strong></div>
+      <div>Last seen <strong>{{ device.last_seen_at|fmt_dt }}</strong></div>
+      <div>Battery <strong>{% if battery is not none %}{{ '%.3f'|format(battery) }} V{% else %}—{% endif %}</strong></div>
+      <div>Signal <strong>{% if signal is not none %}{{ '%.0f'|format(signal) }}{% else %}—{% endif %}</strong></div>
+      <div>Model <strong>{{ model or '—' }}</strong></div>
+    </div>
+
+    {% if uplinks %}
+      {% for u in uplinks %}
+      <article>
+        <header>
+          <span>#{{ u.id }}</span>
+          <span>{{ u.received_at|fmt_dt }}</span>
+          <span>{{ u.topic }}</span>
+          {% if u.battery is not none %}<span>batt {{ '%.3f'|format(u.battery) }} V</span>{% endif %}
+          {% if u.signal is not none %}<span>sig {{ '%.0f'|format(u.signal) }}</span>{% endif %}
+        </header>
+        <pre>{{ u.payload_pretty }}</pre>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p class="empty">No uplinks stored yet for this device.</p>
+    {% endif %}
+  </main>
+</body>
+</html>
