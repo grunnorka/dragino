@@ -6,10 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-COPY requirements.txt /app/requirements.txt
+# Build context is the git repo root (railway up archive)
+COPY dashboard/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY . /app/dashboard/
+COPY dashboard/ /app/dashboard/
 
 RUN chmod +x /app/dashboard/docker-entrypoint.sh
 
