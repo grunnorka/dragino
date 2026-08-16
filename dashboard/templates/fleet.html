@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="{{ refresh_seconds }}">
+  <title>Dragino fleet</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e7ecf1;
+      --muted: #8b98a5;
+      --ok: #3d9a5f;
+      --stale: #c48a2a;
+      --never: #8a4b4b;
+      --line: #2a3542;
+      --accent: #5b8def;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2a3a 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-size: 1.6rem; font-weight: 600; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+    table { width: 100%; border-collapse: collapse; background: color-mix(in srgb, var(--panel) 88%, transparent); }
+    th, td { text-align: left; padding: 0.75rem 0.85rem; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
+    th { color: var(--muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .ok { background: color-mix(in srgb, var(--ok) 25%, transparent); color: #9be0b3; }
+    .stale { background: color-mix(in srgb, var(--stale) 25%, transparent); color: #f0d08a; }
+    .never-seen { background: color-mix(in srgb, var(--never) 30%, transparent); color: #efb0b0; }
+    .num { font-variant-numeric: tabular-nums; }
+    footer { margin-top: 1.25rem; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dragino fleet</h1>
+    <p class="sub">Stale after {{ stale_after_hours }}h · auto-refresh {{ refresh_seconds }}s · {{ now|fmt_dt }}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Device</th>
+          <th>Status</th>
+          <th>Last seen</th>
+          <th>Battery</th>
+          <th>Signal</th>
+          <th>Model</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in devices %}
+        <tr>
+          <td><a href="/devices/{{ d.id }}">{{ d.id }}</a></td>
+          <td><span class="pill {{ d.status }}">{{ d.status }}</span></td>
+          <td class="num">{{ d.last_seen_at|fmt_dt }}</td>
+          <td class="num">{% if d.battery is not none %}{{ '%.3f'|format(d.battery) }} V{% else %}—{% endif %}</td>
+          <td class="num">{% if d.signal is not none %}{{ '%.0f'|format(d.signal) }}{% else %}—{% endif %}</td>
+          <td>{{ d.model or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">No devices seeded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <footer>Read-only · MQTT ingest writes Postgres · no downlinks in v1</footer>
+  </main>
+</body>
+</html>
