@@ -1,0 +1,3 @@
+# Railpack fallback if Dockerfile is not used
+[deploy]
+startCommand = "/bin/sh /app/dashboard/docker-entrypoint.sh"
