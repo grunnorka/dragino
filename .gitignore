@@ -1,10 +1,12 @@
 .venv/
 .env
 *.local.env
+dashboard.local.env
 config.local.json
 logs/
 *.log
 *.log.err
 __pycache__/
 *.pyc
+.railway/
 

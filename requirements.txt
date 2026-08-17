@@ -1,3 +1,7 @@
 pyserial>=3.5
 paho-mqtt>=2.0
 bleak>=0.22
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+jinja2>=3.1.0
+psycopg[binary]>=3.2.0
