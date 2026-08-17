@@ -188,3 +188,133 @@ AT+DEBUG=1
 ```
 
 IOTMOD=0, APN=NULL, DEBUG=1 retained. Raw bench log with the unredacted ThingsBoard token remains local only (`bench-logs/2026-08-17-vodafone-bench-raw.log`) and is **not** committed.
+
+## ACL wildcard experiment
+
+**Portal change:** the user added a wildcard FQDN member `*.*` to the `IDER_ACL` allowlist for the Vodafone GDSP SIM `901280043992222`. Previously the allowlist contained only `vakt.systemat.is`. The change was made immediately before this bench run, so the ~30-minute propagation window was monitored.
+
+**Bench run:** two sessions were captured on `/dev/ttyUSB0` @ 9600:
+- `logs/20260817_122527_pscb_vodafone_wildcard.raw.log` — started at 12:25:27 UTC, interrupted at 12:30:49 UTC when new DNS-parser intel arrived.
+- `logs/20260817_123049_pscb_vodafone_wildcard.raw.log` — restarted at 12:30:49 UTC with manual DNS probes included; the device was already in the vakt config from the interrupted run.
+
+**Configuration used for the test window:**
+
+```text
+AT+SERVADDR=vakt.systemat.is,1883
+AT+BKDNS=1,0,167.235.104.181,1883
+AT+UNAME=REolfpKD7Gsq08gxT0fu
+AT+PWD=NULL
+AT+PUBTOPIC=v1/devices/me/telemetry
+AT+SUBTOPIC=v1/devices/me/attributes
+AT+TDC=120
+AT+PRO=3,5
+AT+TLSMOD=0,0
+AT+MQOS=1
+AT+DEBUG=1
+AT+IOTMOD=0
+AT+APN=NULL
+```
+
+### Critical pre-condition: AT+GDNS=0
+
+The initial `AT+CFG` dump of the restarted session showed:
+
+```text
+AT+DNSCFG="8.8.8.8","8.8.4.4"
+AT+BKDNS=1,0,167.235.104.181,1883
+AT+GDNS=0
+```
+
+`AT+GDNS=0` means the firmware does **not** perform a real DNS lookup; it uses the configured `BKDNS` fallback IP (`167.235.104.181`). Therefore every observed `Domain IP:167.235.104.181` line is the fallback, not a DNS resolution. This precludes the DNS-snoop/learning hypothesis from being tested in this configuration — the ACL never sees a DNS lookup from the SIM, because the device skips DNS entirely.
+
+### Hostname window timeline (15 cycles, ~30 min)
+
+All 15 cycles in the hostname window completed successfully. There was **no observable reset→pass transition**; the first cycle after the restarted ATZ already passed. This is consistent with the initial interrupted run, whose first cycle succeeded at 12:28:28 UTC.
+
+| Cycle | Wall start (UTC) | DNS behavior | Key URCs / final strings | Verdict |
+|---|---|---|---|---|
+| 0 | 12:31:47 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 1 | 12:33:47 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 2 | 12:35:46 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 3 | 12:37:46 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 4 | 12:39:46 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 5 | 12:41:45 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 6 | 12:43:45 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 7 | 12:45:45 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 8 | 12:47:44 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 9 | 12:49:44 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 10 | 12:51:44 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 11 | 12:53:43 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 12 | 12:55:43 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 13 | 12:57:43 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 14 | 12:59:42 | `Domain IP:167.235.104.181` (BKDNS fallback) | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+
+No `+QMTSTAT: 0,1` failures were observed in any hostname cycle. The cycle period was approximately 2 minutes, matching `TDC=120`.
+
+### Manual DNS probes (15-minute mark)
+
+At 12:46:29 UTC, after 8 successful cycles, the following console passthrough probes were sent while the PDP context was active (`+QIACT: 1,1,1,"100.78.62.217"`):
+
+```text
+AT+MDM=AT+QIDNSGIP=1,"vakt.systemat.is"
+AT+MDM=AT+QIDNSGIP=1,"google.com"
+AT+MDM=AT+QIDNSCFG=1
+AT+MDM=AT+CGCONTRDP
+```
+
+Raw replies captured:
+
+```text
+..OK....+QIURC: "dnsgip",568..
++QIDNSCFG: 1,"141.1.1.1","195.27.1.1"
++CGCONTRDP: 1,5,"lpwa.vodafone.is",100.78.62.217,,141.1.1.1,195.27.1.1
+```
+
+Observations:
+- The active DNS servers are the Vodafone-assigned DNS: `141.1.1.1` and `195.27.1.1` (not the `8.8.8.8`/`8.8.4.4` shown in `AT+DNSCFG`).
+- The PDP context is `lpwa.vodafone.is`, PDP IP `100.78.62.217`.
+- `+QIURC: "dnsgip",568` was returned for the DNS lookups. Per Quectel documentation, error **568** means **wrong PDP** (e.g., `BG96_CME_ERROR_0568 568 // wrong PDP`). The same error appeared for both `vakt.systemat.is` and `google.com`, so this is not a Vodafone ACL filter against `vakt.systemat.is` specifically; it is a general DNS-on-PDP failure in this context.
+- The BG95 emits the result as `+QIURC: "dnsgip",<err>,...`. The openfw `uplink.c::resolve_host()` is reported to look for `+QIDNSGIP: 1,...` instead, so even if the DNS result had been `0` (success), the firmware would likely not recognize it. This is a separate firmware parser bug.
+
+### Direct-IP leg
+
+After the hostname window, `AT+SERVADDR=167.235.104.181,1883` was set, ATZ applied, and three cycles were observed:
+
+| Cycle | Wall start (UTC) | DNS behavior | Key URCs / final strings | Verdict |
+|---|---|---|---|---|
+| 0 | 13:02:09 | `No DNS resolution required` | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 1 | 13:04:09 | `No DNS resolution required` | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+| 2 | 13:06:08 | `No DNS resolution required` | `+QMTOPEN: 0,0` → `+QMTCONN: 0,0,0` → `+QMTPUB: 0,1,0` → `Upload data successfully` | PASS |
+
+Direct IP to `167.235.104.181:1883` passes. This proves the `*.*` wildcard allows raw-IP traffic to the vakt server; no DNS lookup is required for the ACL to permit it.
+
+### Restore confirmation
+
+After the direct-IP leg, the Railway production configuration was restored from `railway-mqtt.local.env` and `ATZ` applied. A separate verify dump (`logs/20260817_131002_pscb_vodafone_wildcard_restore_verify.raw.log`) confirms:
+
+```text
+AT+SERVADDR=altaria.proxy.rlwy.net,33239
+(altaria.proxy.rlwy.net,33239)
+AT+CLIENT=ps-cb
+AT+UNAME=dragino
+AT+PWD=***
+AT+PUBTOPIC=dragino/ps-cb/up
+AT+SUBTOPIC=dragino/ps-cb/down
+AT+TDC=180
+AT+APN=NULL
+AT+PRO=3,5
+AT+BKDNS=1,0,66.33.22.220,33239
+AT+TLSMOD=0,0
+AT+MQOS=1
+AT+IOTMOD=0
+AT+DEBUG=1
+```
+
+IOTMOD=0, APN=NULL, DEBUG=1 retained. Raw bench logs with the unredacted credentials remain in `logs/` and are **not** committed.
+
+### Conclusion for Sýn
+
+- **Did the `*.*` ACL change fix MQTT to vakt over Vodafone?** Yes. Every cycle in the hostname window and the direct-IP window completed with `+QMTCONN: 0,0,0` and `Upload data successfully`.
+- **Is the FQDN/DNS-snoop mechanism confirmed?** No. The device was configured with `AT+GDNS=0`, so it never performed a real DNS lookup. The `Domain IP:167.235.104.181` prints were the static `BKDNS` fallback. Real DNS probes (`+QIDNSGIP`) failed with error 568 for both `vakt.systemat.is` and `google.com`, using Vodafone-assigned DNS servers. Therefore the ACL cannot have learned the IP by snooping the SIM's DNS lookups in this run.
+- **What mechanism is most likely?** The wildcard `*.*` became a broad allow that permits raw-IP traffic to `167.235.104.181`. The direct-IP leg also passed, which supports this interpretation. The DNS-snoop hypothesis remains unproven; a repeat test with `AT+GDNS=1` (and a fixed firmware parser for `+QIURC: "dnsgip"`) would be needed to test it properly.
+- **Firmware issue to staff separately:** `uplink.c::resolve_host()` appears to expect `+QIDNSGIP: 1,...` while the BG95 returns `+QIURC: "dnsgip",...`. Even if the ACL/DNS path were fixed, the current parser would likely stall on a real DNS lookup.
