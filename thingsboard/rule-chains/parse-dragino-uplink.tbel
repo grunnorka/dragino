@@ -1,0 +1,119 @@
+// Paste into "Parse Dragino uplink" script node (TBEL).
+// Also embedded in dragino.json — keep in sync when editing.
+var ATTR_KEYS = ['IMEI', 'IMSI', 'Model', 'latitude', 'longitude', 'gps_time', 'idc_alarm', 'vdc_alarm'];
+var LIVE_KEYS = ['idc_input', 'vdc_input', 'battery', 'signal', 'interrupt', 'interrupt_level', 'time'];
+
+var scaleCm = 100.0;
+if (metadata.ss_probe_full_scale_cm != null) {
+    var parsedScale = Double.parseDouble(metadata.ss_probe_full_scale_cm);
+    if (parsedScale > 0) {
+        scaleCm = parsedScale;
+    }
+}
+
+var outs = [];
+
+var attrMsg = {};
+var hasAttr = false;
+foreach (ak: ATTR_KEYS) {
+    if (msg[ak] != null) {
+        attrMsg[ak] = msg[ak];
+        hasAttr = true;
+    }
+}
+if (hasAttr) {
+    outs.add({
+        msg: attrMsg,
+        metadata: metadata,
+        msgType: 'POST_ATTRIBUTES_REQUEST'
+    });
+}
+
+var liveValues = {};
+foreach (lk: LIVE_KEYS) {
+    if (msg[lk] != null) {
+        liveValues[lk] = msg[lk];
+    }
+}
+if (msg.idc_input != null) {
+    var liveIdc = Double.parseDouble(String.valueOf(msg.idc_input));
+    if (liveIdc >= 4.0) {
+        var liveDepth = (liveIdc - 4.0) / 16.0 * scaleCm;
+        if (liveDepth < 0.0) {
+            liveDepth = 0.0;
+        }
+        if (liveDepth > scaleCm) {
+            liveDepth = scaleCm;
+        }
+        liveValues['depth_cm'] = Math.round(liveDepth * 1000.0) / 1000.0;
+        liveValues['depth_mm'] = Math.round(liveDepth * 10.0 * 1000.0) / 1000.0;
+    }
+}
+
+var telemetryPoints = [];
+var liveTs = null;
+if (msg.time != null) {
+    liveTs = new Date(String.valueOf(msg.time)).getTime();
+}
+if (liveValues.size() > 0) {
+    if (liveTs != null && liveTs > 0) {
+        telemetryPoints.add({
+            ts: liveTs,
+            values: liveValues
+        });
+    } else {
+        outs.add({
+            msg: liveValues,
+            metadata: metadata,
+            msgType: 'POST_TELEMETRY_REQUEST'
+        });
+    }
+}
+
+var i = 1;
+while (i <= 32) {
+    var key = String.valueOf(i);
+    var slot = msg[key];
+    if (slot != null && isList(slot) && slot.size() >= 3) {
+        var sampleTs = new Date(String.valueOf(slot[2])).getTime();
+        if (sampleTs != null && sampleTs > 0) {
+            var hist = {};
+            hist['idc_input'] = slot[0];
+            hist['vdc_input'] = slot[1];
+            var histIdc = Double.parseDouble(String.valueOf(slot[0]));
+            if (histIdc >= 4.0) {
+                var histDepth = (histIdc - 4.0) / 16.0 * scaleCm;
+                if (histDepth < 0.0) {
+                    histDepth = 0.0;
+                }
+                if (histDepth > scaleCm) {
+                    histDepth = scaleCm;
+                }
+                hist['depth_cm'] = Math.round(histDepth * 1000.0) / 1000.0;
+                hist['depth_mm'] = Math.round(histDepth * 10.0 * 1000.0) / 1000.0;
+            }
+            telemetryPoints.add({
+                ts: sampleTs,
+                values: hist
+            });
+        }
+    }
+    i = i + 1;
+}
+
+if (telemetryPoints.size() > 0) {
+    outs.add({
+        msg: telemetryPoints,
+        metadata: metadata,
+        msgType: 'POST_TELEMETRY_REQUEST'
+    });
+}
+
+if (outs.size() == 0) {
+    return {
+        msg: msg,
+        metadata: metadata,
+        msgType: msgType
+    };
+}
+return outs;
