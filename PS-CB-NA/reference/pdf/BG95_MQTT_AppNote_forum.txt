@@ -1,0 +1,2422 @@
+M95 MQTT
+Application Note
+
+ GSM/GPRS Module Series
+
+ Rev. M95_MQTT_Application_Note_V1.0
+
+ Date: 2017-06-12
+
+
+
+
+                                       www.quectel.com
+                                                                           GSM/GPRS Module Series
+                                                                         M95 MQTT Application Note
+
+
+
+
+Our aim is to provide customers with timely and comprehensive service. For any
+assistance, please contact our company headquarters:
+
+Quectel Wireless Solutions Co., Ltd.
+Office 501, Building 13, No.99, Tianzhou Road, Shanghai, China, 200233
+Tel: +86 21 5108 6236
+Email: info@quectel.com
+
+
+Or our local office. For more information, please visit:
+
+
+
+
+                            l
+http://www.quectel.com/support/salesupport.aspx
+
+
+
+
+                         t e
+For technical support, or to report documentation errors, please visit:
+
+
+
+
+                       c           l
+http://www.quectel.com/support/techsupport.aspx
+
+
+
+
+                                 a
+Or Email to: Support@quectel.com
+
+
+
+GENERAL NOTES
+
+
+
+
+                  u e       n t i
+QUECTEL OFFERS THE INFORMATION AS A SERVICE TO ITS CUSTOMERS. THE INFORMATION
+
+
+
+
+                Q ide
+PROVIDED IS BASED UPON CUSTOMERS‟ REQUIREMENTS. QUECTEL MAKES EVERY EFFORT
+TO ENSURE THE QUALITY OF THE INFORMATION IT MAKES AVAILABLE. QUECTEL DOES NOT
+MAKE ANY WARRANTY AS TO THE INFORMATION CONTAINED HEREIN, AND DOES NOT ACCEPT
+
+
+
+
+                     f
+ANY LIABILITY FOR ANY INJURY, LOSS OR DAMAGE OF ANY KIND INCURRED BY USE OF OR
+RELIANCE UPON THE INFORMATION. ALL INFORMATION SUPPLIED HEREIN IS SUBJECT TO
+
+
+
+
+                   n
+CHANGE WITHOUT PRIOR NOTICE.
+
+
+
+
+                 o
+COPYRIGHT
+
+
+
+
+                C
+THE INFORMATION CONTAINED HERE IS PROPRIETARY TECHNICAL INFORMATION OF
+QUECTEL CO., LTD. TRANSMITTING, REPRODUCTION, DISSEMINATION AND EDITING OF THIS
+DOCUMENT AS WELL AS UTILIZATION OF THE CONTENT ARE FORBIDDEN WITHOUT
+PERMISSION. OFFENDERS WILL BE HELD LIABLE FOR PAYMENT OF DAMAGES. ALL RIGHTS
+ARE RESERVED IN THE EVENT OF A PATENT GRANT OR REGISTRATION OF A UTILITY MODEL
+OR DESIGN.
+
+
+
+Copyright © Quectel Wireless Solutions Co., Ltd. 2017. All rights reserved.
+
+
+
+
+M95_MQTT_Application_Note                         Confidential / Released                  1 / 25
+                                                                 GSM/GPRS Module Series
+                                                               M95 MQTT Application Note
+
+
+
+
+About the document
+
+History
+
+ Revision     Date
+
+
+
+
+                      t el  Author              Description
+
+
+
+
+                    c           l
+                            Louis GU/
+ 1.0          2017-06-12                        Initial
+                            Sherlock ZHAO
+
+
+
+
+               u e         t ia
+             Q ide       n
+                n f
+             Co
+
+M95_MQTT_Application_Note                   Confidential / Released              2 / 25
+                                                                                                                 GSM/GPRS Module Series
+                                                                                                               M95 MQTT Application Note
+
+
+
+
+Contents
+
+About the document ................................................................................................................................ 2
+Contents .................................................................................................................................................... 3
+Table Index ............................................................................................................................................... 4
+
+1     Introduction ....................................................................................................................................... 5
+
+2     MQTT Data Interaction ...................................................................................................................... 6
+
+3     MQTT AT Commands ........................................................................................................................ 7
+
+
+
+
+                                     l
+      3.1.      AT Command Syntax ............................................................................................................ 7
+      3.2.      Description of AT Commands ................................................................................................ 8
+
+
+
+
+                                    e
+           3.2.1. AT+QMTCFG Configure Parameters of MQTT ........................................................... 8
+
+
+
+
+                                  t
+           3.2.2. AT+QMTOPEN Open a Network for MQTT Client .....................................................11
+
+
+
+
+                                c           l
+           3.2.3. AT+QMTCLOSE Close a Network for MQTT Client .................................................. 12
+
+
+
+
+                                          a
+           3.2.4. AT+QMTCONN Connect a Client to MQTT Server ................................................... 12
+
+
+
+
+                             e           i
+           3.2.5. AT+QMTDISC Disconnect a Client from MQTT Server ............................................. 14
+
+
+
+
+                                       t
+           3.2.6. AT+QMTSUB Subscribe to Topics ............................................................................ 14
+
+
+
+
+                           u
+           3.2.7. AT+QMTUNS Unsubscribe from Topics .................................................................... 15
+
+
+
+
+                                     n
+           3.2.8. AT+QMTPUB Publish Messages .............................................................................. 16
+
+
+
+
+                         Q ide
+4     MQTT Related Notifications ........................................................................................................... 18
+         4.1.1. Description of URC “+QMTSTAT” ................................................................................ 18
+         4.1.2. Description of “+QMTRECV” ....................................................................................... 19
+
+
+
+
+                              f
+5     Examples ......................................................................................................................................... 20
+
+
+
+
+                            n
+      5.1.   Example of MQTT Operation without SSL .......................................................................... 20
+      5.2.   Example of MQTT Operation with SSL ............................................................................... 22
+
+
+
+
+                          o
+6     Appendix .......................................................................................................................................... 24
+
+
+
+
+                         C
+      6.1.   References ......................................................................................................................... 24
+      6.2.   Summary of ERROR Codes ............................................................................................... 25
+
+
+
+
+M95_MQTT_Application_Note                                                      Confidential / Released                                             3 / 25
+                                                                                                        GSM/GPRS Module Series
+                                                                                                      M95 MQTT Application Note
+
+
+
+
+Table Index
+
+TABLE 1: MQTT RELATED NOTIFICATIONS .................................................................................................. 18
+TABLE 2: ERROR CODES OF THE URC ......................................................................................................... 18
+TABLE 3: RELATED DOCUMENT .................................................................................................................... 24
+TABLE 4: TERMS AND ABBREVIATIONS ........................................................................................................ 24
+TABLE 5: SUMMARY OF ERROR CODES ...................................................................................................... 25
+
+
+
+
+                                t el
+                           e  c        ia l
+                         u         n t
+                       Q ide
+                          n f
+                       Co
+
+M95_MQTT_Application_Note                                               Confidential / Released                                        4 / 25
+                                                                        GSM/GPRS Module Series
+                                                                      M95 MQTT Application Note
+
+
+
+
+1 Introduction
+MQTT (Message Queuing Telemetry Transport) is a broker-based publish/subscribe messaging protocol
+designed to be open, simple, lightweight and easy to implement. It is designed for connections with
+remote locations where a "small code footprint" is required or the network bandwidth is limited. This
+document mainly introduces how to use the MQTT function of Quectel M95 modules through AT
+
+
+
+
+                            l
+commands.
+
+
+
+
+                       c t e       l
+                  u e         t ia
+                Q ide       n
+                   n f
+                Co
+
+M95_MQTT_Application_Note                         Confidential / Released                    5 / 25
+                                                                                                                                  GSM/GPRS Module Series
+                                                                                                                                M95 MQTT Application Note
+
+
+
+
+2 MQTT Data Interaction
+This chapter gives the data interaction mechanism of MQTT function.
+
+
+                                         MCU                                Modem                          Link layer                            MQTT Server
+   Data report type (None URC):
+
+
+
+
+                                        l
+   +QMT***: <tcpid>,<type>,…                    AT+QMTCFG=“WILL”,<tcpidx>,<value>..
+   (1) type=0: Receive ACK packets from server; AT+QMTCFG=“USER”,<tcpidx>,<value>..
+   (2) type=1: Packet sending timeout and       AT+QMTCFG=“TIMEOUT”,<tcpidx>,<pkt_timeout>,<retry_times>
+              retransmission;                   …...
+
+
+
+
+                                       e
+   (3) type=2: Packet sending timeout and
+              the maximum times of
+              transmission is reached.
+
+
+
+
+                                     t
+                                                AT+QMTOPEN=tcpidx,“host name”,<port>
+                                                                                         TCP-REQ
+                                        OK                                                                                       TCP SYN                 T1 is packet
+
+
+
+
+                                               l
+                                                                                                                              TCP SYN+ACK                transmission
+                                                                                                                                                         timeout.
+
+
+
+
+                                   c
+                                                                                                                                TCP ACK
+                                                                                           TCP established                                               T2 is keep alive
+                                              +QMTOPEN: tcpidx,<result>
+                                                                                                                                                         timer.
+                            AT+QMTCONN                                                                                                                   In the absence of a
+
+
+
+
+                                             a
+                                              AT+QMTCONN=tcpidx,“client id”,...                                                                          data-related
+                                                                                             CONN-REQ
+                                                                                                                           Send connect packet
+
+
+
+
+                                e
+                                                                                                                                                         message during
+
+
+
+
+                                            i
+                                        OK                                         Start timer
+                                                                                     T1, T2                             Receive connect ACK packet       the T2 time period,
+                                                                                                 CONN ACK-IND                                            client will send
+
+
+
+
+                                          t
+                                              +QMTCONN: tcpidx,<result>,<ret_code>     Stop T1 or handle Excep1                                          pingreq packet.
+
+
+
+
+                              u
+                                                                                                                                                         Excep1:
+                            AT+QMTSUB         AT+QMTSUB=tcpidx,msgId...                                            +QMTSUB: tcpidx,1,msgId               disconnect the
+
+
+
+
+                                        n
+                                                                                       SUB-REQ (msgId)                                                   TCP connection.
+                                        OK                                         Start timer                            Send subscribe packet
+                                                                                       T1                                                                Excep2:
+                                                                                                                       Receive subscribe ACK packet      resend packets
+
+
+
+
+                            Q ide
+                                                                                   SUB ACK-IND (msgId)                                                   unless max retry
+                                              +QMTSUB: tcpidx,msgId,<result>,<value> Stop T1 or handle Excep2                                            times is reached;
+                                                                                                                                                         retry times is set
+                            AT+QMTUNS         AT+QMTUNS=tcpidx,msgId...                                            +QMTUNS: tcpidx,1,msgId               by qmtcfg.
+                                                                                       UNS-REQ (msgId)
+                                        OK                                         Start timer                           Send unsubscribe packet
+                                                                                       T1
+                                                                                                                      Receive unsubscribe ACK packet
+                                                                                     UNS ACK-IND (msgId)
+                                              +QMTUNS: tcpidx,<msgId>,<result>
+
+
+
+
+                                 f
+                                                                                      Stop T1 or handle Excep2
+
+                                                                                                                                                        Whether the timeout
+                                              AT+QMTPUB=tcpidx,topic,qos=0...                                                                           information is reported
+                                                                                                 PUB-REQ
+                                                                                                                           Send publish packet
+
+
+
+
+                               n
+                                        OK                                                                                                              can be configured by
+                                                                                                                                                        AT+QMTCFG.
+                            AT+QMTPUB                                                                              +QMTPUB: tcpidx,1,msgId
+                                              AT+QMTPUB=tcpidx,msgId,qos=1...
+                            (qos=1)                                                      PUB-REQ (msgId)
+
+
+
+
+                             o
+                                        OK                                         Start timer                             Send publish packet
+                                                                                       T1
+                                                                                                                        Receive publish ACK packet
+                                                                                     PUB ACK-IND (msgId)
+                                              +QMTPUB: tcpidx,msgId,<result>,...       Stop T1 or handle Excep2
+
+
+
+
+                            C
+                            AT+QMTPUB         AT+QMTPUB=tcpidx,msgId,qos=2...                                      +QMTPUB: tcpidx,1,msgId
+                            (qos=2)                                                      PUB-REQ (msgId)
+                                        OK                                         Start timer                             Send publish packet
+                                                                                       T1
+
+                                                                                                                       Receive publish receive packet
+                                                                                     PUB REC-IND (msgId)
+                                                                                       Stop T1 or handle Excep2
+                                                                                                                   +QMTPUBREL: tcpidx,1,msgId
+                                                                                     PUB REL-REQ (msgId)
+                                                                                   Start timer                          Send publish release packet
+                                                                                       T1
+                                                                                                                      Receive publish complete packet
+                                                                                     PUB COMP-IND (msgId)
+                                              +QMTPUB: tcpidx,msgId,<result>,...        Stop T1 or handle Excep2
+
+
+
+                            Receive                                                                                       Receive publish packet
+   Receive PUBLISH                                                                    PUB-IND (msgId)
+   message in the form of                     +QMTRCV: tcpidx,msgId,<topic>,<payload>
+   URC.                                                                         PUB ACK/REC-REQ (msgId)
+                                                                                                                         Send publish reply packet
+                                                                                        Reply according to qos
+                                                                                                    ...
+
+                                              AT+QMTDISC=tcpidx
+                                                                                           DISC-REQ
+                                                                                                                          Send disconnect packet
+                                         OK
+                                               +QMTDISC: tcpidx,<result>
+                                              AT+QMTCLOSE=tcpidx                            TCP-REQ
+                                                                                                                          TCP disconnect request
+                                         OK                                                                                        ...
+                                                                                       TCP disconnected
+                                              +QMTCLOSE: tcpidx...
+
+
+
+
+                                                Figure 1: MQTT Data Interaction Diagram
+
+
+
+
+M95_MQTT_Application_Note                                                              Confidential / Released                                                          6 / 25
+                                                                       GSM/GPRS Module Series
+                                                                     M95 MQTT Application Note
+
+
+
+
+3 MQTT AT Commands
+This chapter presents the AT commands for operating MQTT function.
+
+
+
+
+                           l
+3.1. AT Command Syntax
+
+
+
+
+                        t e       l
+Table 1: Types of AT Commands and Responses
+
+
+
+
+                   e  c        ia
+                                     This command returns the list of parameters and value ranges
+ Test Command        AT+<x>=?
+
+
+
+
+                             t
+                                     set by the corresponding Write Command or internal processes.
+
+
+
+
+                 u
+                                     This command returns the currently set value of the parameter
+
+
+
+
+                           n
+ Read Command        AT+<x>?
+                                     or parameters.
+
+
+
+
+               Q ide
+ Write Command       AT+<x>=<…>      This command sets the user-definable parameter values.
+
+ Execution                           This command reads non-variable parameters affected by
+                     AT+<x>
+ Command                             internal processes in the UE.
+
+
+
+
+                  n f
+               Co
+
+M95_MQTT_Application_Note                        Confidential / Released                      7 / 25
+                                                                             GSM/GPRS Module Series
+                                                                           M95 MQTT Application Note
+
+
+
+3.2. Description of AT Commands
+
+
+3.2.1. AT+QMTCFG         Configure Parameters of MQTT
+
+The command is used to configure optional parameters of MQTT.
+
+AT+QMTCFG        Configure Optional Parameters of MQTT
+Test Command                              Response
+AT+QMTCFG=?
+                                          +QMTCFG:
+                                          “<config_type>”,(list of supported <tcpconnectID>s),[,(list of
+
+
+
+
+                            l
+                                          supported <value>s)]
+
+
+
+
+                         t e
+                                          OK
+
+
+
+
+                                   l
+Write Command                             Response
+
+
+
+
+                       c
+Configure Will information                OK
+
+
+
+
+                    e            a
+AT+QMTCFG=“WILL”,<tcpconnectID
+
+
+
+
+                                i
+>[,<will_fg>[,<will_qos>,<will_retain>,
+
+
+
+
+                              t
+                                          If <will_fg>, <will_qos>, <will_retain>, <will_topic> and
+“<will_topic>”,“<will_msg>”]]
+
+
+
+
+                  u
+                                          <will_msg> are omitted, query the “WILL” value.
+
+
+
+
+                            n
+                                          Response
+
+
+
+
+                Q ide
+                                          +QMTCFG: <will_fg>[,<will_qos>,<will_retain>,
+                                          <will_topic>,<will_msg>]
+
+                                          OK
+
+
+
+
+                   n f
+                                          If there is an error related to ME functionality:
+                                          +CME ERROR: <err>
+
+
+
+
+                 o
+Write Command                             Response
+Configure timeout of message delivery     OK
+
+
+
+
+                C
+AT+QMTCFG=“TIMEOUT”,<tcpconne
+ctID>[,<pkt_timeout>[,<retry_times>][     If <pkt_timeout>, <retry_times>, <timeout_notice> are
+,<timeout_notice>]]                       omitted, query the “TIMEOUT” value.
+                                          Response
+                                          +QMTCFG: <pkt_timeout>,<retry_times>,<timeout_notice>
+
+                                          OK
+
+                                          If there is an error related to ME functionality:
+                                          +CME ERROR: <err>
+
+
+
+
+M95_MQTT_Application_Note                           Confidential / Released                    8 / 25
+                                                                                GSM/GPRS Module Series
+                                                                              M95 MQTT Application Note
+
+
+Write Command                                Response
+Configure session type                       OK
+AT+QMTCFG=“SESSION”,<tcpconne
+ctID>[,<clean_session>]                      If <clean_session> is omitted, query the “SESSION” value.
+                                             Response
+                                             +QMTCFG: <clean_session>
+
+                                             OK
+
+                                             If there is an error related to ME functionality:
+                                             +CME ERROR: <err>
+
+
+
+
+                            l
+Write Command                                Response
+Configure keep alive time                    OK
+
+
+
+
+                         t e
+AT+QMTCFG=“KEEPALIVE”,<tcpcon
+                                             If <keep-alive time> is omitted, query the “KEEPALIVE” value.
+
+
+
+
+                                   l
+nectID>[,<keep-alive time>]
+
+
+
+
+                       c
+                                             Response
+
+
+
+
+                                 a
+                                             +QMTCFG: <keep-alive time>
+
+
+
+
+                  u e         t i
+                                             OK
+
+
+
+
+                            n
+                                             If there is an error related to ME functionality:
+
+
+
+
+                Q ide
+                                             +CME ERROR: <err>
+Write Command                                Response
+Configure SSL secure connection              OK
+
+
+
+
+                     f
+AT+QMTCFG=“SSL”,<tcpconnectID>[
+,<sslenable>[,<ctxindex>]]                   If <sslenable> is omitted, query the “SSL” value.
+
+
+
+
+                   n
+                                             Response
+
+
+
+
+                 o
+                                             +QMTCFG: <sslenable>[,<ctxindex>]
+
+
+
+
+                C
+                                             OK
+
+                                             If there is an error related to ME functionality:
+                                             +CME ERROR: <err>
+
+Maximum Response Time                        300ms
+
+
+
+Parameter
+
+<config_type>            The type of configuration. It can be any of the following types:
+                         “WILL”
+                         “TIMEOUT”
+                         “SESSION”
+                         “KEEPALIVE”
+                         “SSL”
+
+
+
+M95_MQTT_Application_Note                              Confidential / Released                    9 / 25
+                                                                           GSM/GPRS Module Series
+                                                                         M95 MQTT Application Note
+
+
+<tcpconnectID>        MQTT socket identifier. The range is 0-5.
+<value>               Configuration value of MQTT optional parameter.
+<will_fg>             Configure the Will flag
+                      0 Ignore the Will flag configuration
+                      1 Require the Will flag configuration
+<will_qos>            Quality of service for message delivery
+                      0 At most once
+                      1 At least once
+                      2 Exactly once
+<will_retain>         The Will retain flag is only used on PUBLISH messages.
+                      0 When a client sends a PUBLISH message to a server, the server will not
+
+
+
+
+                            l
+                          hold on to the message after it has been delivered to the current subscribers
+                      1 When a client sends a PUBLISH message to a server, the server should
+
+
+
+
+                           e
+                          hold on to the message after it has been delivered to the current subscribers
+
+
+
+
+                         t
+<will_topic>          Will topic string
+
+
+
+
+                       c           l
+<will_msg>            The Will message defines the content of the message that is published to the will
+
+
+
+
+                                 a
+                      topic if the client is unexpectedly disconnected. It can be a zero-length message.
+
+
+
+
+                    e           i
+<pkt_timeout>         Timeout of the packet delivery. The range is 1-60. The default value is 5.
+
+
+
+
+                  u           t
+                      Unit: second.
+
+
+
+
+                            n
+<retry_times>         Retry times when packet delivery times out. The range is 0-10. The default value
+                      is 3.
+
+
+
+
+                Q ide
+<timeout_notice>      0 Not report timeout message when transmitting packet
+                      1 Report timeout message when transmitting packet
+<clean_session>       Configure the session type
+
+
+
+
+                     f
+                      0 The server must store the subscriptions of the client after it disconnects.
+                      1 The server must discard any previously maintained information about the
+
+
+
+
+                   n
+                        client and treat the connection as “clean”.
+
+
+
+
+                 o
+<keep-alive time>      Keep alive time. The range is 0-3600. The default value is 120. Unit: second. It
+                       defines the maximum time interval between messages received from a client. If
+                       the server does not receive a message from the client within 1.5 times of the
+
+
+
+
+                C
+                       keep alive time period, it disconnects the client as if the client has sent a
+                       DISCONNECT message.
+                        0   The client is not disconnected
+<sslenable>             Configure the MQTT SSL mode
+                        0 Use normal TCP connection for MQTT
+                        1 Use SSL TCP secure connection for MQTT
+<ctxindex>              SSL context index. The range is 0-5.
+
+
+
+NOTES
+1.   If <will_flag>=1, then <will_qos>, <will_retain>, <will_topic> and <will_msg> must be present.
+     Otherwise they will be omitted.
+2.   <clean_session>=0 is only effective when server supports the operation.
+3.   If MQTT connection is configured to SSL mode, <ctxindex> must be present. Also, customers need
+
+
+
+M95_MQTT_Application_Note                          Confidential / Released                       10 / 25
+                                                                              GSM/GPRS Module Series
+                                                                            M95 MQTT Application Note
+
+
+     to use AT+QSSLCFG command to configure the SSL version, cipher suite, secure level, CA
+     certificate, client certificate, client key and ignorance of RTC time, which will be used in MQTT SSL
+     handshake procedure.
+4.   Care must be taken to ensure message delivery does not time out while it is still being sent.
+
+
+
+
+3.2.2. AT+QMTOPEN           Open a Network for MQTT Client
+
+The command is used to open a network for MQTT client.
+
+AT+QMTOPEN          Open a Network for MQTT Client
+
+
+
+
+                             l
+Test Command                               Response
+
+
+
+
+                            e
+AT+QMTOPEN=?                               +QMTOPEN:
+
+
+
+
+                          t
+                                           (list of supported <tcpconnectID>s),“<host_name>”,(list of
+
+
+
+
+                                    l
+                                           supported <port>s)
+
+
+
+
+                     e  c        ia
+                                           OK
+
+
+
+
+                               t
+Read Command                               Response
+
+
+
+
+                   u
+AT+QMTOPEN?                                [+QMTOPEN: <tcpconnectID>,“<host_name>”,<port>]
+
+
+
+
+                 Q ide       n
+                                           OK
+Write Command                              Response
+AT+QMTOPEN=<tcpconnectID>,“<ho             OK
+
+
+
+
+                      f
+st_name>”,<port>
+                                           +QMTOPEN: <tcpconnectID>,<result>
+
+
+
+
+                    n
+                                           If there is an error related to ME functionality:
+
+
+
+
+                  o
+                                           +CME ERROR: <err>
+
+
+
+
+                 C
+Maximum Response Time                      75s, determined by network
+
+
+
+Parameter
+
+<tcpconnectID>         MQTT socket identifier. The range is 0-5.
+<host_name>            The address of the server. It could be an IP address or a domain name. The
+                       maximum size is 100 bytes.
+<port>                 The port of the server. The range is 1-65535.
+<result>               Result of the command execution
+                       -1 Failed to open network
+                       0 Opened network successfully
+                       1 Wrong parameter
+                       2 MQTT identifier is occupied
+                       3   Failed to activate PDP
+
+
+
+M95_MQTT_Application_Note                            Confidential / Released                      11 / 25
+                                                                            GSM/GPRS Module Series
+                                                                          M95 MQTT Application Note
+
+
+                     4    Failed to parse domain name
+                     5    Network disconnection error
+
+
+
+
+3.2.3. AT+QMTCLOSE          Close a Network for MQTT Client
+
+The command is used to close a network for MQTT client.
+
+AT+QMTCLOSE          Close a Network for MQTT Client
+Test Command                             Response
+AT+QMTCLOSE=?                            +QMTCLOSE: (list of supported <tcpconnectID>s)
+
+
+
+
+                           el
+                                         OK
+
+
+
+
+                         t
+Write Command                            Response
+
+
+
+
+                                   l
+AT+QMTCLOSE=<tcpconnectID>               OK
+
+
+
+
+                    e  c        ia
+                                         +QMTCLOSE: <tcpconnectID>,<result>
+
+
+
+
+                  u           t
+                                         If there is an error related to ME functionality:
+
+
+
+
+                            n
+                                         +CME ERROR: <err>
+
+
+
+
+                Q ide
+Maximum Response Time                    300ms
+
+
+
+
+                     f
+Parameter
+
+
+
+
+                   n
+<tcpconnectID>        MQTT socket identifier. The range is 0-5.
+<result>              Result of the command execution
+
+
+
+
+                 o
+                      -1     Failed to close network
+                      0      Closed network successfully
+
+
+
+
+CONNECT flow.
+                C
+3.2.4. AT+QMTCONN          Connect a Client to MQTT Server
+
+The command is used when a client requests a connection to MQTT server. When a TCP/IP socket
+connection is established from a client to a server, a protocol level session must be created using a
+
+
+
+AT+QMTCONN         Connect a Client to MQTT Server
+Test Command                             Response
+AT+QMTCONN=?                             +QMTCONN: (list of supported <tcpconnectID>s),
+                                         “<clientID>”[,“<username>”[,“<password>”]]
+
+                                         OK
+
+
+
+M95_MQTT_Application_Note                          Confidential / Released                   12 / 25
+                                                                           GSM/GPRS Module Series
+                                                                         M95 MQTT Application Note
+
+
+Read Command                            Response
+AT+QMTCONN?                             [+QMTCONN: <tcpconnectID>,<state>]
+
+                                        OK
+Write Command                           Response
+AT+QMTCONN=<tcpconnectID>,“<cli         OK
+entID>”[,“<username>”[,“<password
+>”]]                                    +QMTCONN: <tcpconnectID>,<result>[,<ret_code>]
+
+                                        If there is an error related to ME functionality:
+                                        +CME ERROR: <err>
+
+
+
+
+                            l
+Maximum Response Time                   <pkt_timeout> (default 5s), determined by network
+
+
+
+
+                         t e       l
+Parameter
+
+
+
+
+                    e  c        ia
+<tcpconnectID>       MQTT socket identifier. The range is 0-5.
+
+
+
+
+                              t
+<clientID>           The client identifier string.
+
+
+
+
+                  u
+<username>           User name of the client. It can be used for authentication.
+
+
+
+
+                            n
+<password>           Password corresponding to the user name of the client. It can be used for
+
+
+
+
+                Q ide
+                      authentication.
+<result>             Result of the command execution
+                     0    Sent packet successfully and received ACK from server
+                     1    Packet retransmission
+
+
+
+
+                     f
+                     2    Failed to send packet
+
+
+
+
+                   n
+<state>              MQTT connection state
+                     1  MQTT is initial
+
+
+
+
+                 o
+                     2  MQTT is connecting
+                     3  MQTT is connected
+
+
+
+
+                C
+                     4  MQTT is disconnecting
+<ret_code>           Connect return code
+                     0   Connection Accepted
+                     1   Connection Refused: Unacceptable Protocol Version
+                     2   Connection Refused: Identifier Rejected
+                     3   Connection Refused: Server Unavailable
+                     4   Connection Refused: Bad User Name or Password
+                     5   Connection Refused: Not Authorized
+
+
+
+ NOTE
+
+If a client with the same Client ID is already connected to the server, the "older" client must be
+disconnected by the server before completing the CONNECT flow of the new client.
+
+
+
+
+M95_MQTT_Application_Note                         Confidential / Released                   13 / 25
+                                                                              GSM/GPRS Module Series
+                                                                            M95 MQTT Application Note
+
+
+
+3.2.5. AT+QMTDISC          Disconnect a Client from MQTT Server
+
+The command is used when a client requests a disconnection from MQTT server. A DISCONNECT
+message is sent from the client to the server to indicate that it is about to close its TCP/IP connection.
+
+AT+QMTDISC         Disconnect a Client from MQTT Server
+Test Command                               Response
+AT+QMTDISC=?                               +QMTDISC: (list of supported <tcpconnectID>s)
+
+                                           OK
+Write Command                              Response
+
+
+
+
+                            l
+AT+QMTDISC=<tcpconnectID>                  OK
+
+
+
+
+                         t e
+                                           +QMTDISC: <tcpconnectID>,<result>
+
+
+
+
+                       c           l
+                                           If there is an error related to ME functionality:
+
+
+
+
+                                 a
+                                           +CME ERROR: <err>
+
+
+
+
+                    e         t i
+Maximum Response Time                      300ms
+
+
+
+Parameter
+
+<tcpconnectID>
+<result>          u
+                Q ide       n
+                      MQTT socket identifier. The range is 0-5.
+                      Result of the command execution
+
+
+
+
+                     f
+                      -1 Failed to close connection
+
+
+
+
+                   n
+                      0 Closed connection successfully
+
+
+
+
+                 o
+3.2.6. AT+QMTSUB          Subscribe to Topics
+
+
+
+
+                C
+The command is used to subscribe to one or more topics. A SUBSCRIBE message is sent by a client to
+register an interest in one or more topic names with the server. Messages published to these topics are
+delivered from the server to the client as PUBLISH messages.
+
+AT+QMTSUB         Subscribe to Topics
+Test Command                             Response
+AT+QMTSUB=?                              +QMTSUB: (list of supported <tcpconnectID>s),(list of
+                                         supported <msgID>s),“<topic>”,(list of supported <qos>s)
+
+                                         OK
+Write Command                            Response
+AT+QMTSUB=<tcpconnectID>,<ms             OK
+gID>,“<topic1>”,<qos1>[,“<topic2>
+”,<qos2>…]                               +QMTSUB: <tcpconnectID>,<msgID>,<result>[,<value>]
+
+
+
+M95_MQTT_Application_Note                            Confidential / Released                      14 / 25
+                                                                              GSM/GPRS Module Series
+                                                                            M95 MQTT Application Note
+
+
+
+                                         If there is an error related to ME functionality:
+                                         +CME ERROR: <err>
+                                         <pkt_timeout> * <retry_times> (default 15s), determined by
+Maximum Response Time
+                                         network
+
+
+Parameter
+
+<tcpconnectID>       MQTT socket identifier. The range is 0-5.
+<msgID>              Message identifier of packet. The range is 1-65535.
+<topic>              Topic that the client wants to subscribe to or unsubscribe from
+
+
+
+
+                             l
+<qos>                The QoS level at which the client wants to publish the messages.
+
+
+
+
+                            e
+                     0     At most once
+
+
+
+
+                          t
+                     1     At least once
+
+
+
+
+                                    l
+                     2     Exactly once
+
+
+
+
+                        c
+<result>             Result of the command execution
+
+
+
+
+                     e           ia
+                     0      Sent packet successfully and received ACK from server
+
+
+
+
+                               t
+                     1      Packet retransmission
+
+
+
+
+                   u
+                     2      Failed to send packet
+
+
+
+
+                             n
+<value>              If <result> is 0, it is a vector of granted QoS levels.
+
+
+
+
+                 Q ide
+                     If <result> is 1, it means the times of packet retransmission.
+                     If <result> is 2, it will not be presented.
+
+
+
+
+                      f
+ NOTE
+
+
+
+
+                    n
+The <msgID> is only present in messages where the QoS bits in the fixed header indicate QoS levels 1
+or 2. It must be unique amongst the set of "in flight" messages in a particular direction of communication.
+
+
+
+
+                  o
+It typically increases by exactly one from one message to the next, but is not required to do so.
+
+
+
+
+                 C
+3.2.7. AT+QMTUNS          Unsubscribe from Topics
+
+The command is used to unsubscribe from one or more topics. An UNSUBSCRIBE message is sent by
+the client to the server to unsubscribe from named topics.
+
+AT+QMTUNS         Unsubscribe from Topics
+Test Command                             Response
+AT+QMTUNS=?                              +QMTUNS: (list of supported <tcpconnectID>s),(list of
+                                         supported <msgID>s),“<topic>”
+
+                                         OK
+Write Command                            Response
+AT+QMTUNS=<tcpconnectID>,<ms             OK
+
+
+
+
+M95_MQTT_Application_Note                            Confidential / Released                       15 / 25
+                                                                                 GSM/GPRS Module Series
+                                                                               M95 MQTT Application Note
+
+
+gID>,“<topic1>”[,“<topic2>”…]
+                                            +QMTUNS: <tcpconnectID>,<msgID>,<result>
+
+                                            If there is an error related to ME functionality:
+                                            +CME ERROR: <err>
+                                            <pkt_timeout> * <retry_times> (default 15s), determined by
+Maximum Response Time
+                                            network
+
+
+
+Parameter
+
+
+
+
+                             l
+<tcpconnectID>       MQTT socket identifier. The range is 0-5.
+<msgID>              Message identifier of packet. The range is 1-65535.
+
+
+
+
+                            e
+<topic>              Topic that the client wants to subscribe to or unsubscribe from
+
+
+
+
+                          t
+<result>             Result of the command execution
+
+
+
+
+                        c           l
+                     0      Sent packet successfully and received ACK from server
+
+
+
+
+                                  a
+                     1      Packet retransmission
+
+
+
+
+                     e           i
+                     2      Failed to send packet
+
+
+
+
+                   u         n t
+                 Q ide
+3.2.8. AT+QMTPUB          Publish Messages
+
+The command is used to publish messages by a client to a server for distribution to interested subscribers.
+Each PUBLISH message is associated with a topic name. If a client subscribes to one or more topics, any
+
+
+
+
+                      f
+message published to those topics are sent by the server to the client as a PUBLISH message.
+
+
+
+
+                    n
+AT+QMTPUB         Publish Messages
+
+
+
+
+                  o
+Test Command                                  Response
+AT+QMTPUB=?                                   +QMTPUB: (list of supported <tcpconnectID>s),(list of
+
+
+
+
+                 C
+                                              supported <msgID>s),(list of supported <qos>s),(list of
+                                              supported <retain>s),“<topic>”,“<msg>”
+
+                                              OK
+Write Command                                 Response
+AT+QMTPUB=<tcpconnectID>,<msgI                OK
+D>,<qos>,<retain>,“<topic>”
+After “>” is responded, input the data to     +QMTPUB: <tcpconnectID>,<msgID>,<result>[,<value>]
+be sent. Tap “CTRL+Z” to send, and tap
+“ESC” to cancel the operation.                If there is an error related to ME functionality:
+                                              +CME ERROR: <err>
+Maximum Response Time                         <pkt_timeout> * <retry_times> (default 15s), determined by
+                                              network
+
+
+
+
+M95_MQTT_Application_Note                               Confidential / Released                   16 / 25
+                                                                            GSM/GPRS Module Series
+                                                                          M95 MQTT Application Note
+
+
+Parameter
+
+<tcpconnectID>        MQTT socket identifier. The range is 0-5.
+<msgID>               Message identifier of packet. The range is 0-65535. It will be 0 only when
+                      <qos>=0.
+<qos>                 The QoS level at which the client wants to publish the messages.
+                      0 At most once
+                      1 At least once
+                      2 Exactly once
+<retain>              The server will retain the message after it has been delivered to the current
+                      subscribers or not.
+
+
+
+
+                             l
+                      0 The server will not retain the message after it has been delivered to the
+                          current subscribers
+
+
+
+
+                            e
+                      1 The server will retain the message after it has been delivered to the current
+
+
+
+
+                          t
+                          subscribers
+
+
+
+
+                        c           l
+<topic>                Topic that needs to be published
+
+
+
+
+                                  a
+<result>               Result of the command execution
+
+
+
+
+                     e           i
+                       0 Sent packet successfully and received ACK from server (message that
+
+
+
+
+                   u           t
+                           published when <qos>=0 does not require ACK)
+
+
+
+
+                             n
+                      1    Packet retransmission
+                      2    Failed to send packet
+
+
+
+
+                 Q ide
+<value>               If <result> is 1, it means the times of packet retransmission.
+                      If <result> is 0 or 2, it will not be presented.
+
+
+
+
+                      f
+NOTES
+
+
+
+
+                    n
+1.   If this command is executed successfully and gets OK back, the client can continue to publish new
+
+
+
+
+                  o
+     packet. The maximum quantity of transmitting packet should not be greater than that of in-flight
+     windows (5); otherwise, +CME ERROR: 8512 will be returned. For more details, please refer to
+
+
+
+
+                 C
+     Chapter 6.2.
+2.   After executing this command, the client will be ready to send data, which will be sent as payload.
+     The maximum length of the input data is 1548 bytes at a time and tap “Ctrl+Z‟ to send the data.
+3.   PUBLISH messages can be sent either from a publisher to the server, or from the server to a
+     subscriber. When        server       publishes        messages         to        a       subscriber,
+     +QMTRECV: <tcpconnectID>,<msgID>,<topic>,<payload> will be returned to notify the host to
+     read the received data that is reported from MQTT server. For more details, please refer to
+     Chapter 4.1.2.
+
+
+
+
+M95_MQTT_Application_Note                           Confidential / Released                      17 / 25
+                                                                           GSM/GPRS Module Series
+                                                                         M95 MQTT Application Note
+
+
+
+
+4 MQTT Related Notifications
+This chapter gives MQTT related notifications and their descriptions.
+
+
+
+Table 1: MQTT Related Notifications
+
+
+
+
+                             l
+ Index    Notification Display                                Description
+
+
+
+
+                          t e
+                                                              When the state of MQTT link layer is
+
+
+
+
+                                    l
+ [1]      +QMTSTAT: <tcpconnectID>,<err_code>                 changed, the client will close the MQTT
+
+
+
+
+                        c
+                                                              connection and report the URC.
+
+
+
+
+                     e           ia
+          +QMTRECV:                                           The client has received the packet data
+ [2]
+
+
+
+
+                               t
+          <tcpconnectID>,<msgID>,<topic><payload>             from MQTT server.
+
+
+
+
+                   u
+                 Q ide       n
+4.1.1. Description of URC “+QMTSTAT”
+
+Table 2: Error Codes of the URC
+
+
+
+
+                      f
+Code of <err>     Description                        How to do
+
+
+
+
+                    n
+                  Connection is closed or reset by   Execute AT+QMTOPEN command and reopen
+
+
+
+
+                  o
+1
+                  peer.                              MQTT connection.
+                  Sending PINGREQ packet             Deactivate PDP first, and then active PDP and
+
+
+
+
+                 C
+2
+                  timed out or failed.               reopen MQTT connection.
+                                                     1. Check inputted user name and password are
+                                                        correct or not.
+                  Sending CONNECT packet
+3                                                    2. Make sure the client ID is not used.
+                  timed out or failed
+                                                     3. Reopen MQTT connection and try to send
+                                                        CONNECT packet to server again.
+                                                     1. Check inputted user name and password are
+                                                        correct or not.
+                  Receiving CONNACK packet
+4                                                    2. Make sure the client ID is not used.
+                  timed out or failed
+                                                     3. Reopen MQTT connection and try to send
+                                                        CONNECT packet to server again.
+                  Client sends DISCONNECT
+5                 packet to sever but server is      This is a normal process.
+                  initiative to close MQTT
+
+
+
+
+M95_MQTT_Application_Note                            Confidential / Released                    18 / 25
+                                                                               GSM/GPRS Module Series
+                                                                             M95 MQTT Application Note
+
+
+                 connection.
+
+                 Client is initiative to close MQTT    1. Make sure the data is correct.
+6                connection due to packet              2. Try to reopen MQTT connection since there
+                 sending failure all the time.            may be network congestion or error.
+                 The link is not alive or the server   Make sure the link is alive or the server is available
+7
+                 is unavailable                        currently.
+
+8-255            Reserved for future use
+
+
+
+
+                            l
+4.1.2. Description of “+QMTRECV”
+
+
+
+
+                           e
+The format of data report is “+QMTRECV:”. It is mainly used to notify the host to read the received MQTT
+
+
+
+
+                         t
+packet data that is reported from MQTT server.
+
+
+
+
+                       c           l
+Notify the Host to Read MQTT Packet Data
+
+
+
+
+                    e           ia
++MQTRECV:                                  Notify the host to read the received data that is reported from
+
+
+
+
+                              t
+<tcpconnectID>,<msgID>,<topic>,            MQTT server.
+
+
+
+
+                  u
+<payload>
+
+
+
+
+                            n
+                                           Notify the host to read the received data that is reported from
+
+
+
+
+                Q ide
+Reference
+                                           MQTT server.
+
+
+Parameter
+
+
+
+
+                     f
+<tcpconnectID>        MQTT socket identifier. The range is 0-5.
+
+
+
+
+                   n
+<msgID>               The message identifier of packet
+<topic>               The topic that received from MQTT server
+
+
+
+
+                 o
+<payload>             The payload that relates to the topic name
+
+
+
+
+                C
+M95_MQTT_Application_Note                              Confidential / Released                        19 / 25
+                                                                          GSM/GPRS Module Series
+                                                                        M95 MQTT Application Note
+
+
+
+
+5 Examples
+This chapter gives the examples to explain how to use MQTT commands.
+
+
+
+5.1. Example of MQTT Operation without SSL
+
+
+
+
+                             l
+AT+QMTOPEN=?
+
+
+
+
+                            e
++QMTOPEN: <tcpconnectID>,“<host_name>”,<port>
+
+
+
+
+                        c t         l
+OK
+
+
+
+
+                     e           ia
+//Open a network for MQTT client.
+
+
+
+
+                               t
+AT+QMTOPEN=0, “220.180.239.212”,1883
+
+
+
+
+                   u
+OK
+
+
+
+
+                 Q ide       n
++QMTOPEN: 0,0                  //Opened the MQTT client network successfully.
+
+AT+QMTOPEN?
++QMTOPEN: 0,“220.180.239.212”,1883
+
+
+
+
+                    n f
+OK
+
+
+
+
+                  o
+AT+QMTCONN=?
++QMTCONN: <tcpconnectID>,“<clientID>” [,“<username>”[,“<password>”]]
+
+
+
+
+                 C
+OK
+
+//Connect a client to MQTT server.
+AT+QMTCONN=0,“clientExample”,“username”,“password”
+OK
+
++QMTCONN: 0,0,0                //Connected the client to MQTT server successfully.
+
+AT+QMTSUB=?
++QMTSUB : <tcpconnectID>,<msgID>,“<topic>”,<qos>
+
+OK
+
+//Subscribe to topics.
+
+
+
+M95_MQTT_Application_Note                          Confidential / Released                20 / 25
+                                                                               GSM/GPRS Module Series
+                                                                             M95 MQTT Application Note
+
+
+AT+QMTSUB=0,1,“topic/example”,2
+OK
+
++QMTSUB: 0,1,0,2
+
+AT+QMTSUB=0,1,“topic/pub”,0
+OK
+
++QMTSUB: 0,1,0,0
+
+//If a client subscribes to a topic and other devices publish the same topic to the server, the module will
+
+
+
+
+                             l
+report the following information.
++QMTRECV: 0,0, “topic/example”, “This is the payload related to topic”
+
+
+
+
+                          t e
+//Unsubscribe from topics.
+
+
+
+
+                        c           l
+AT+QMTUNS=0,2, “topic/example”
+
+
+
+
+                                  a
+OK
+
+
+
+
+                   u e         t i
++QMTUNS: 0,2,0
+
+
+
+
+                             n
+AT+QMTPUB=?
+
+
+
+
+                 Q ide
++QMTPUB : <tcpconnectID>,<msgID>,<qos>,<retain>,“<topic>”
+
+OK
+
+
+
+
+                      f
+//Publish messages.
+
+
+
+
+                    n
+AT+QMTPUB=0,0,0,0,“topic/pub”
+                                       //After receiving „>‟, input data “This is test data, hello MQTT.” and
+
+
+
+
+                  o
+>This is test data, hello MQTT.
+                                        send it. The maximum length of the data is 1548 bytes and the data
+                                        that beyond 1548 bytes will be omitted. After inputting data, tap
+
+
+
+
+                 C
+                                        “Ctrl+Z” to send.
+OK
+
++QMTPUB: 0,0,0
+
+//If a client subscribes to a topic named “topic/pub” and other devices publish the same topic to the server,
+the module will report the following information.
++QMTRECV: 0,0, “topic/pub”,This is test data, hello MQTT.
+
+//Disconnect a client from MQTT server.
+AT+QMTDISC=0
+OK
+
++QMTDISC: 0,0                         //Closed disconnection successfully.
+
+
+
+
+M95_MQTT_Application_Note                             Confidential / Released                        21 / 25
+                                                                             GSM/GPRS Module Series
+                                                                           M95 MQTT Application Note
+
+
+
+5.2. Example of MQTT Operation with SSL
+
+//Configure MQTT session into SSL mode.
+AT+QMTCFG=”SSL”, 0, 1, 2
+OK
+
+//If SSL authentication mode is “server authentication”, store CA certificate to RAM.
+AT+QSECWRITE="RAM:cacert.pem",1758,100
+CONNECT
+<Input the cacert.pem data, the size is 1758 bytes>
++QSECWRITE: 1758,384a
+
+
+
+
+                            el
+OK
+
+
+
+
+                          t         l
+//If SSL authentication mode is “server authentication”, store CC certificate to RAM.
+
+
+
+
+                        c
+AT+QSECWRITE="RAM:client.pem",1220,100
+
+
+
+
+                     e           ia
+CONNECT
+
+
+
+
+                               t
+<Input the client.pem data, the size is 1220 bytes>
+
+
+
+
+                   u
++QSECWRITE: 1220,2d53
+
+
+
+
+                 Q ide       n
+OK
+
+//If SSL authentication mode is “server authentication”, store CK certificate to RAM.
+AT+QSECWRITE="RAM:user_key.pem",1679,100
+
+
+
+
+                      f
+CONNECT
+
+
+
+
+                    n
+<Input the client.pem data, the size is 1679 bytes>
++QSECWRITE: 1679,335f
+
+
+
+
+                  o
+OK
+
+
+
+
+                 C
+//Configure CA certificate.
+AT+QSSLCFG="cacert",2,"RAM:cacert.pem"
+OK
+
+//Configure CC certificate.
+AT+QSSLCFG="clientcert",2,"RAM:client.pem"
+OK
+
+//Configure CK certificate.
+AT+QSSLCFG="clientkey",2,"RAM:user_key.pem"
+OK
+
+//Configure SSL parameters.
+AT+QSSLCFG="seclevel”,2,2                     //SSL authentication mode: server authentication
+
+
+
+M95_MQTT_Application_Note                            Confidential / Released                     22 / 25
+                                                                      GSM/GPRS Module Series
+                                                                    M95 MQTT Application Note
+
+
+OK
+AT+QSSLCFG="sslversion”,2,4         //SSL authentication version
+OK
+AT+QSSLCFG="ciphersuite”,2,”0xFFFF” //Cipher suite
+OK
+AT+Qsslcfg="ignorertctime",1         //Ignore the time of authentication.
+OK
+
+//Start MQTT SSL connection.
+AT+QMTOPEN=0, "a1zgnxur10j8ux.iot.us-east-1.amazonaws.com",”8883”
+OK
+
+
+
+
+                             l
++QMTOPEN: 0,0
+
+
+
+
+                          t e
+//Connect a client to MQTT server.
+
+
+
+
+                        c           l
+AT+QMTCONN=0,"M95_0206"
+
+
+
+
+                                  a
+OK
+
+
+
+
+                   u e         t i
++QMTCONN: 0,0,0
+
+
+
+
+                             n
+//Subscribe to topics.
+
+
+
+
+                 Q ide
+AT+QMTSUB=0,1,"$aws/things/M95_0206/shadow/update/accepted",1
+OK
+
+
+
+
+                      f
++QMTSUB: 0,1,0,1
+
+
+
+
+                    n
+//Publish messages.
+
+
+
+
+                  o
+AT+QMTPUB=0,1,1,0,"$aws/things/M95_0206/shadow/update/accepted"
+>This is publish data from client
+OK
+
+
+
+
+                 C
++QMTPUB: 0,1,0
+
+//If a client subscribes to a topic named “$aws/things/M95_0905/shadow/update/accepted” and other
+devices publish the same topic to the server, the module will report the following information.
++QMTRECV: 0,1,"$aws/things/M95_0206/shadow/update/accepted",This is publish data from
+client
+
+//Disconnect a client from MQTT server.
+AT+QMTDISC=0
+OK
+
++QMTDISC: 0,0
+
+
+
+
+M95_MQTT_Application_Note                       Confidential / Released                   23 / 25
+                                                                      GSM/GPRS Module Series
+                                                                    M95 MQTT Application Note
+
+
+
+
+6 Appendix
+6.1. References
+
+
+
+
+                          el
+Table 3: Related Document
+
+
+
+
+                        t         l
+SN     Document Name                                    Remarks
+
+
+
+
+                   e  c         a
+[1]    MQTT V3.1 Protocol Specification                 MQTT protocol specification version 3.1
+
+
+
+
+                 u         n t i
+Table 4: Terms and Abbreviations
+
+
+
+
+               Q ide
+Abbreviation           Description
+
+ACK                    Acknowledgement
+
+
+
+
+                    f
+MQTT                   Message Queuing Telemetry Transport
+
+
+
+
+                o n
+QoS                    Quality of Service
+
+RAM                    Random Access Memory
+
+
+
+
+               C
+SSL                    Secure Sockets Layer
+
+
+TCP                    Transmission Control Protocol
+
+
+URC                    Unsolicited Result Code
+
+
+
+
+M95_MQTT_Application_Note                        Confidential / Released                    24 / 25
+                                                                             GSM/GPRS Module Series
+                                                                           M95 MQTT Application Note
+
+
+
+6.2. Summary of ERROR Codes
+
+<err> indicates an error related to mobile equipment or network. The details about <err> are described in
+the following table.
+
+
+
+Table 5: Summary of Error Codes
+
+Code of <err>                                        Meaning
+
+
+
+
+                            l
+8503                                                 MQTT link error
+
+
+
+
+                           e
+8504                                                 MQTT illegal packet
+
+
+
+
+                         t         l
+8505                                                 MQTT illegal character
+
+
+
+
+                    e  c        ia
+8506                                                 MQTT illegal UTF8
+
+
+
+
+                  u           t
+8507                                                 MQTT invalid parameter
+
+
+
+
+                Q ide       n
+8508                                                 MQTT packet too large
+
+8509                                                 MQTT buffer overflow
+
+
+
+
+                     f
+8510                                                 MQTT out of memory
+
+
+
+
+                   n
+8511                                                 MQTT memory error
+
+
+
+
+                 o
+8600                                                 MQTT unknown error
+
+
+
+
+                C
+                                                     MQTT maximum quantity of transmitting packet
+8512
+                                                     greater than that of in-flight windows
+
+
+
+
+M95_MQTT_Application_Note                           Confidential / Released                      25 / 25
+

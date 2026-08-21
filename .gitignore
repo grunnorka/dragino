@@ -11,3 +11,8 @@ __pycache__/
 .railway/
 
 forQwen.md
+logs-openfw/
+PS-CB-NA/firmware/reference/
+.cursor/mcp.json
+.cursor/*.log
+.cursor/debug-*.log

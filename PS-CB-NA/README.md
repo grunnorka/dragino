@@ -1,8 +1,9 @@
 # PS-CB-NA (analog sensor)
 
-NB-IoT / LTE-M analog node (`idc_input` / `vdc_input`). UART console default **COM8 @ 9600**.
+NB-IoT / LTE-M analog node (`idc_input` / `vdc_input`).
 
-**LLM / operator setup playbook:** [SETUP.md](SETUP.md) (Railway MQTT, AT order, ATZ check, uplink monitoring).
+**Start here if you are an LLM or new operator:** [HANDOFF.md](HANDOFF.md)  
+Then: [SETUP.md](SETUP.md) (Railway MQTT) · [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md) (flash / dark board).
 
 ## PIN
 
@@ -12,21 +13,24 @@ Use workspace `.env` key `DRAGINO_PIN` (gift-box sticker). Do not commit the PIN
 
 | Path | Contents |
 |---|---|
-| `SETUP.md` | Step-by-step Railway MQTT configure playbook |
-| `firmware/` | `PS-CB_v1.2.0.hex` |
-| `manuals/` | Full MD export, PDF stub, structured extract |
-| `scripts/` | Railway configure, GPS helpers, TB diag, uplink observe |
+| `HANDOFF.md` | Current status + next steps for the next agent |
+| `SETUP.md` | Railway MQTT configure playbook |
+| `FIRMWARE_UPDATE.md` | Bootloader recovery, flash map, AT pitfalls |
+| `firmware/` | Shipped images (`PS-CB-NA_v1.2.1.hex`, bootloader); `reference/` is gitignored upstream NBSN95 source |
+| `manuals/` | Product manual extract |
+| `scripts/` | Flash, verify, reset/reapply, MQTT fix, port diag |
 
-## Common commands
+## Common commands (Linux)
 
 From repo root:
 
-```powershell
-python shared/monitor.py --port COM8 --unlock-now --debug --poll 60 --set-cycle 120
-python PS-CB-NA/scripts/configure_pscb_railway.py
-python PS-CB-NA/scripts/configure_pscb_tb_pro35.py
-python PS-CB-NA/scripts/observe_uplink_cycles.py
-python PS-CB-NA/scripts/tb_diag_once.py
+```bash
+.venv/bin/python PS-CB-NA/scripts/verify_pscb.py
+.venv/bin/python PS-CB-NA/scripts/fix_pscb_mqtt.py
+.venv/bin/python PS-CB-NA/scripts/reset_and_apply_pscb.py
+.venv/bin/python shared/session_monitor.py --device ps-cb --policy stable --cycles 3
 ```
 
-AT handoff (ThingsBoard / older notes): [../docs/AT_COMMANDS_HANDOFF.md](../docs/AT_COMMANDS_HANDOFF.md).
+Flashing (SW1=ISP): `.venv/bin/python PS-CB-NA/scripts/recover_pscb.py`
+
+Broker docs: [../docs/RAILWAY_MQTT.md](../docs/RAILWAY_MQTT.md).

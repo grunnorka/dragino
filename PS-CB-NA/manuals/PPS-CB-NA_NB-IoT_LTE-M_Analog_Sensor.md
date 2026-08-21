@@ -260,4 +260,4 @@ Expect private TB host in both `SERVADDR` and `BKDNS` (no `hivemq`).
 | ThingsBoard Type=3 server rewrite | Companion MD §2.2.3 |
 | BKDNS / HiveMQ SERVADDR example / MQOS | NB-IoT general stack docs (CB models) |
 | Serial agent handoff | `AT_COMMANDS_HANDOFF.md` |
-| HiveMQ incident notes | `HIVEMQ_BROKER_SWITCH.md` |
+| HiveMQ incident notes | `docs/HIVEMQ_AND_BROKER_PERSISTENCE.md` |

@@ -1,0 +1,1569 @@
+BG95&BG77&BG600L Series
+MQTT Application Note
+
+ LPWA Module Series
+
+ Rev. BG95&BG77&BG600L_Series_MQTT_Application_Note_V1.1
+
+ Date: 2020-05-28
+
+ Status: Released
+
+
+
+
+                                                www.quectel.com
+                                                                         LPWA Module Series
+                                               BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+Our aim is to provide customers with timely and comprehensive service. For any
+assistance, please contact our company headquarters:
+
+Quectel Wireless Solutions Co., Ltd.
+Building 5, Shanghai Business Park Phase III (Area B), No.1016 Tianlin Road, Minhang District, Shanghai
+200233, China.
+Tel: +86 21 5108 6236
+Email: info@quectel.com
+
+
+Or our local office. For more information, please visit:
+http://www.quectel.com/support/sales.htm
+
+
+For technical support, or to report documentation errors, please visit:
+http://www.quectel.com/support/technical.htm
+Or email to: support@quectel.com
+
+
+
+GENERAL NOTES
+QUECTEL OFFERS THE INFORMATION AS A SERVICE TO ITS CUSTOMERS. THE INFORMATION
+PROVIDED IS BASED UPON CUSTOMERS’ REQUIREMENTS. QUECTEL MAKES EVERY EFFORT
+TO ENSURE THE QUALITY OF THE INFORMATION IT MAKES AVAILABLE. QUECTEL DOES NOT
+MAKE ANY WARRANTY AS TO THE INFORMATION CONTAINED HEREIN, AND DOES NOT ACCEPT
+ANY LIABILITY FOR ANY INJURY, LOSS OR DAMAGE OF ANY KIND INCURRED BY USE OF OR
+RELIANCE UPON THE INFORMATION. ALL INFORMATION SUPPLIED HEREIN IS SUBJECT TO
+CHANGE WITHOUT PRIOR NOTICE.
+
+
+
+COPYRIGHT
+THE INFORMATION CONTAINED HERE IS PROPRIETARY TECHNICAL INFORMATION OF QUECTEL
+WIRELESS SOLUTIONS CO., LTD. TRANSMITTING, REPRODUCTION, DISSEMINATION AND
+EDITING OF THIS DOCUMENT AS WELL AS UTILIZATION OF THE CONTENT WITHOUT
+PERMISSION ARE FORBIDDEN. OFFENDERS WILL BE HELD LIABLE FOR PAYMENT OF DAMAGES.
+ALL RIGHTS ARE RESERVED IN THE EVENT OF A PATENT GRANT OR REGISTRATION OF A
+UTILITY MODEL OR DESIGN.
+
+
+
+Copyright © Quectel Wireless Solutions Co., Ltd. 2020. All rights reserved.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                   1 / 30
+                                                                 LPWA Module Series
+                                       BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+About the Document
+
+Revision History
+
+Version   Date         Author        Description
+
+1.0       2019-08-08   Lane HAO      Initial
+
+                                     1. Added an applicable module BG600L-M3.
+                                     2. Updated the maximum length of messages to be
+                                        published into 4096 bytes (<msglen> of AT+QMTPUB).
+1.1       2020-05-28   Jaryoung LI   3. Deleted AT+QMTCFG="prefix".
+                                     4. Updated the error response of the AT commands in
+                                        Chapter 3.2.
+                                     5. Deleted the summary of error codes.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                      2 / 30
+                                                                                                 LPWA Module Series
+                                                                       BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+Contents
+
+About the Document ................................................................................................................................... 2
+Contents ....................................................................................................................................................... 3
+Table Index ................................................................................................................................................... 4
+
+1     Introduction .......................................................................................................................................... 5
+      1.1. Applicable Modules ..................................................................................................................... 5
+
+2     MQTT Data Interaction......................................................................................................................... 6
+
+3     MQTT Related AT Commands ............................................................................................................ 7
+      3.1. AT Command Syntax .................................................................................................................. 7
+          3.1.1. Definitions......................................................................................................................... 7
+          3.1.2. AT Command Syntax ....................................................................................................... 7
+      3.2. Description of MQTT Related AT Commands............................................................................. 8
+          3.2.1. AT+QMTCFG Configure Optional Parameters of MQTT .............................................. 8
+          3.2.2. AT+QMTOPEN Open a Network for MQTT Client ...................................................... 13
+          3.2.3. AT+QMTCLOSE Close a Network for MQTT Client ................................................... 13
+          3.2.4. AT+QMTCONN Connect a Client to MQTT Server..................................................... 14
+          3.2.5. AT+QMTDISC Disconnect a Client from MQTT Server .............................................. 16
+          3.2.6. AT+QMTSUB Subscribe to Topics .............................................................................. 16
+          3.2.7. AT+QMTUNS Unsubscribe from Topics ...................................................................... 17
+          3.2.8. AT+QMTPUB Publish Messages ................................................................................ 18
+          3.2.9. AT+QMTPUBEX Publish Messages ........................................................................... 20
+          3.2.10. AT+QMTRECV Read Messages from Buffers ............................................................ 22
+
+4     MQTT Related URCs .......................................................................................................................... 24
+      4.1. +QMTSTAT: URC to Indicate State Change in MQTT Link Layer ......................................... 24
+      4.2. +QMTRECV: URC to Inform the Host to Read MQTT Packet Data ...................................... 25
+
+5     Examples ............................................................................................................................................ 26
+      5.1. Example of MQTT Operation without SSL ............................................................................... 26
+      5.2. Example of MQTT Operation with SSL..................................................................................... 28
+
+6     Appendix A References..................................................................................................................... 30
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                                                                         3 / 30
+                                                                                           LPWA Module Series
+                                                                 BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+Table Index
+
+Table 1: MQTT Related URCs ................................................................................................................... 24
+Table 2: Error Codes of +QMTSTAT: URC ................................................................................................. 24
+Table 3: Related Documents ...................................................................................................................... 30
+Table 4: Terms and Abbreviations .............................................................................................................. 30
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                                                             4 / 30
+                                                                     LPWA Module Series
+                                           BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+1 Introduction
+MQTT (Message Queuing Telemetry Transport) is a broker-based publish/subscribe messaging protocol
+designed to be open, simple, lightweight and easy to implement. It is designed for connections with
+remote locations where a "small code footprint" is required or the network bandwidth is limited.
+
+This document mainly introduces how to use the MQTT function of Quectel BG95 series, BG77 and
+BG600L-M3 modules through AT commands.
+
+
+
+
+1.1. Applicable Modules
+
+
+Table 1: Applicable Modules
+
+
+ Module Series     Model                     Description
+
+                   BG95-M1                   Cat M1 only
+
+                   BG95-M2                   Cat M1/Cat NB2
+
+                   BG95-M3                   Cat M1/Cat NB2/EGPRS
+
+                   BG95-N1                   Cat NB2 Only
+ BG95
+                   BG95-M4                   Cat M1/Cat NB2, 450 MHz Supported
+
+                   BG95-M5                   Cat M1/Cat NB2/EGPRS, Power Class 3
+
+                   BG95-M6                   Cat M1/Cat NB2, Power Class 3
+
+                   BG95-MF                   Cat M1/Cat NB2, Wi-Fi Positioning
+
+ BG77              BG77                      Cat M1/Cat NB2
+
+ BG600L            BG600L-M3                 Cat M1/Cat NB2/EGPRS
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                               5 / 30
+                                                                                                                    LPWA Module Series
+                                                                                          BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+2 MQTT Data Interaction
+This chapter gives the data interaction mechanism of MQTT function.
+
+
+                                      MCU                                                 Modem                        Link layer                           MQTT Server
+
+
+
+                                           AT+QMTCFG=“will”,<client_idx>,<optional>
+                                           AT+QMTCFG=“timeout”,<client_idx>,<optional>
+
+
+                                           AT+QMTOPEN=<client_idx>,<host name>,<port>
+                                                                                                            TCP-REQ
+                                      OK                                                                                                    TCP SYN               T1 is packet
+                                                                                                                                         TCP SYN+ACK              transmission
+                                                                                                                                                                  timeout.
+                                                                                                                                           TCP ACK
+                                                                                                       TCP established                                            T2 is keep alive
+                                           +QMTOPEN: <client_idx>,<result>
+                                                                                                                                                                  timer.
+                          AT+QMTCONN                                                                                                                              In the absence of a
+                                           AT+QMTCONN=<client_idx>,<clientID>,<optional>                                                                          data-related
+                                                                                                            CONN-REQ
+                                                                                                                                      Send connect packet         message during
+                                      OK                                                      Start timer
+                                                                                                T1, T2                          Receive connect ACK packet        the T2 time period,
+                                           +QMTCONN: <client_idx>,<result>[,<ret_code>]                     CONN ACK-IND                                          the client will send
+                                                                                                  Stop T1 or handle Excep1                                        PINGREQ packet.
+
+                                                                                                                                                                  Excep1:
+                          AT+QMTSUB                                                                                                                               Disconnect the
+                                           AT+QMTSUB=<client_idx>,<msgID>,<optional>
+                                                                                                 SUB-REQ (<msgID>)                                                TCP connection.
+                                      OK                                                      Start timer                            Send subscribe packet
+                                                                                                  T1                                                              Excep2:
+                                                                                                                                                                  Resend packets
+                                                                                                                                Receive subscribe ACK packet      unless maximum
+                                           +QMTSUB: <client_idx>,<msgID>,<result>[,<value>]    SUB ACK-IND (<msgID>)
+                                                                                                                                                                  retry times is
+                                                                                                  Stop T1 or handle Excep2
+                                                                                                                                                                  reached.
+                                                                                                                                                                  Retry times is set
+                          AT+QMTUNS        AT+QMTUNS=<client_idx>,<msgID>,<optional>                                                                              by AT+QMTCFG.
+                                                                                                 UNS-REQ (<msgID>)
+                                      OK                                                      Start timer                           Send unsubscribe packet
+                                                                                                  T1
+
+                                           +QMTUNS: <client_idx>,<msgID>,<result>                                              Receive unsubscribe ACK packet
+                                                                                                UNS ACK-IND (<msgID>)
+                                                                                                 Stop T1 or handle Excep2
+
+                                           AT+QMTPUB=<client_idx>,<msgID>,<qos>=0,<ret                                                                           Whether the timeout
+                                           ain>,<topic>                                                                                                          information is reported
+                                                                                                            PUB-REQ
+                                      OK                                                                                              Send publish packet        can be configured by
+                                                                                                                                                                 AT+QMTCFG.
+                          AT+QMTPUB        AT+QMTPUB=<client_idx>,<msgID>,<qos>=1,<ret
+                          (<qos>=1)        ain>,<topic>
+                                                                                                    PUB-REQ (<msgID>)
+                                      OK                                                      Start timer                             Send publish packet
+                                                                                                  T1
+                                                                                                                                 Receive publish ACK packet
+                                                                                                PUB ACK-IND (<msgID>)
+                                           +QMTPUB: <client_idx>,<msgID>,<result>[,<value>]
+                                                                                                  Stop T1 or handle Excep2
+
+
+                          AT+QMTPUB        AT+QMTPUB=<client_idx>,<msgID>,<qos>=2,<ret
+                          (<qos>=2)        ain>,<topic>
+                                                                                                   PUB-REQ (<msgID>)
+                                      OK                                                      Start timer                             Send publish packet
+                                                                                                  T1
+
+                                                                                                                                Receive publish receive packet
+                                                                                                PUB REC-IND (<msgID>)
+                                                                                                  Stop T1 or handle Excep2
+
+                                                                                               PUB REL-REQ (<msgID>)
+                                                                                              Start timer                        Send publish release packet
+                                                                                                  T1
+                                                                                                                               Receive publish complete packet
+                                                                                                PUB COMP-IND (<msgID>)
+                                           +QMTPUB: <client_idx>,<msgID>,<result>[,<value>]
+                                                                                                   Stop T1 or handle Excep2
+
+
+
+                          Receive                                                                                                    Receive publish packet
+ Receive PUBLISH                                                                                    PUB-IND (<msgID>)
+                                           +QMTRECV: <client_idx>,<msgID>,<topic>,<payload>
+ message in the form of
+ URC.                                                                                         PUB ACK/REC-REQ (<msgID>)
+                                                                                                                                    Send publish reply packet
+                                                                                                  Reply according to <qos>
+                                                                                                               ...
+
+                                           AT+QMTDISC=<client_idx>
+                                                                                                      DISC-REQ
+                                                                                                                                    Send disconnect packet          Note:
+                                      OK
+                                           +QMTDISC: <client_idx>,<result>                                                                                          <optional> refers to optional
+                                                                                                                                                                    parameters. For more details about
+                                           AT+QMTCLOSE=<client_idx>                                    TCP-REQ                                                      optional parameters, please refer to
+                                                                                                                                     TCP disconnect request         the description of corresponding AT
+                                      OK                                                                                                       ...
+                                                                                                  TCP disconnected                                                  command in Chapter 3.2.
+                                           +QMTCLOSE: <client_idx>,<result>
+
+
+
+
+                                                         Figure 1: MQTT Data Interaction Diagram
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                                                                                                                  6 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+3 MQTT Related AT Commands
+This chapter presents the AT commands for operating MQTT function.
+
+
+
+
+3.1. AT Command Syntax
+
+3.1.1. Definitions
+
+   <CR>         Carriage return character.
+   <LF>         Line feed character.
+   <...>        Parameter name. Angle brackets do not appear on command line.
+   [...]        Optional parameter of a command or an optional part of TA information response.
+                 Square brackets do not appear on command line. When an optional parameter is
+                 omitted, the new value equals its previous value or its default setting, unless otherwise
+                 specified.
+   Underline    Default setting of a parameter.
+
+
+
+3.1.2. AT Command Syntax
+
+The AT or at prefix must be added at the beginning of each command line. Entering <CR> will terminate a
+command      line.   Commands       are    usually    followed by     a   response    that     includes
+<CR><LF><response><CR><LF>. Throughout this document, only the response <response> will be
+presented, <CR><LF> are omitted intentionally.
+
+
+
+Table 2: Type of AT Commands and Responses
+
+                                                 This command returns the list of parameters and value
+ Test Command             AT+<cmd>=?             ranges set by the corresponding Write Command or
+                                                 internal processes.
+                                                 This command returns the currently set value of the
+ Read Command             AT+<cmd>?
+                                                 parameter or parameters.
+                          AT+<cmd>=<p1>
+ Write Command                                   This command sets the user-definable parameter values.
+                          [,<p2>[,<p3>[...]]]
+                                                 This command reads non-variable parameters affected
+ Execution Command        AT+<cmd>
+                                                 by internal processes in the module.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                     7 / 30
+                                                                      LPWA Module Series
+                                            BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+3.2. Description of MQTT Related AT Commands
+
+3.2.1. AT+QMTCFG        Configure Optional Parameters of MQTT
+
+This command configures optional parameters of MQTT.
+
+ AT+QMTCFG        Configure Optional Parameters of MQTT
+ Test Command                          Response
+ AT+QMTCFG=?                           +QMTCFG: "version",(range of supported <client_idx>s),(list
+                                       of supported <vsn>s)
+                                       +QMTCFG:             "pdpcid",(range        of      supported
+                                       <client_idx>s),(range of supported <cid>s)
+                                       +QMTCFG: "ssl",(range of supported <client_idx>s),( list of
+                                       supported <SSL_enable>s),(range of supported <ctx_index>s)
+                                       +QMTCFG:            "keepalive",(range       of     supported
+                                       <client_idx>s,(range of supported <keep_alive_time>s)
+                                       +QMTCFG: "session",(range of supported <client_idx>s),(list
+                                       of supported <clean_session>s)
+                                       +QMTCFG: "timeout",(range of supported
+                                       <client_idx>s),(range of supported <pkt_timeout>s),(range of
+                                       supported <retry_times>s),(list of supported
+                                       <timeout_notice>s)
+                                       +QMTCFG: "will",(range of supported <client_idx>s),(list of
+                                       supported <will_fg>s),(range of supported <will_qos>s),(list of
+                                       supported <will_retain>s),<will_topic>,<will_message>
+                                       +QMTCFG:           "recv/mode",(range        of     supported
+                                       <client_idx>s),(list of supported <msg_recv_mode>s),(list of
+                                       supported <msg_len_enable>s)
+                                       +QMTCFG:             "aliauth",(range       of      supported
+                                       <client_idx>s),<product_key>,<device_name>,<device_secr
+                                       et>
+
+                                       OK
+ Write Command                         Response
+ Query/set the MQTT protocol version   If the optional parameter is omitted, query the MQTT protocol
+ AT+QMTCFG="version",<client_id        version:
+ x>[,<vsn>]                            +QMTCFG: "version",<vsn>
+
+                                       OK
+
+                                       If the optional parameter is specified, set the MQTT protocol
+                                       version:
+                                       OK
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                 8 / 30
+                                                                      LPWA Module Series
+                                            BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the PDP to be used by the   If the optional parameter is omitted, query the PDP used by the
+MQTT client                           MQTT client:
+AT+QMTCFG="pdpcid",<client_id         +QMTCFG: "pdpcid",<cid>
+x>[,<cid>]
+                                      OK
+
+                                      If the optional parameter is specified, set the PDP to be used by
+                                      the MQTT client:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the MQTT SSL mode and       If the optional parameters are omitted, query the MQTT SSL
+SSL context index                     mode and SSL context index:
+AT+QMTCFG="ssl",<client_idx>[,<       +QMTCFG: "ssl",<SSL_enable>[,<ctx_index>]
+SSL_enable>[,<ctx_index>]]
+                                      OK
+
+                                      If any of the optional parameters is specified, set the MQTT SSL
+                                      mode and SSL context index:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the keep-alive time         If the optional parameter is omitted, query the keep-alive time:
+AT+QMTCFG="keepalive",<client_        +QMTCFG: "keepalive",<keep_alive_time>
+idx>[,<keep_alive_time>]
+                                      OK
+
+                                      If the optional parameter is specified, set the keep-alive time:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the session type            If the optional parameter is omitted, query the session type:
+AT+QMTCFG="session",<client_id        +QMTCFG: "session",<clean_session>
+x>[,<clean_session>]
+                                      OK
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                     9 / 30
+                                                                      LPWA Module Series
+                                            BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                      If the optional parameter is specified, set the session type:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the timeout of message      If the optional parameters are omitted, query the timeout of
+delivery                              message delivery:
+AT+QMTCFG="timeout",<client_id        +QMTCFG: "timeout",<pkt_timeout>,<retry_times>,<timeou
+x>[,<pkt_timeout>[,<retry_times>]     t_notice>
+[,<timeout_notice>]]
+                                      OK
+
+                                      If any of the optional parameters is specified, set the timeout of
+                                      message delivery:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the Will information        If the optional parameters are omitted, query the Will information:
+AT+QMTCFG="will",<client_idx>[,       +QMTCFG: "will",<will_fg>[,<will_qos>,<will_retain>,<will_t
+<will_fg>[,<will_qos>,<will_retain>   opic>,<will_message>]
+,<will_topic>,<will_message>]]
+                                      OK
+
+                                      If any of the optional parameters is specified, set the Will
+                                      information:
+                                      OK
+
+                                      If there is any error:
+                                      ERROR
+Write Command                         Response
+Query/set the MQTT message            If the optional parameters are omitted, query the MQTT
+receiving mode when the data is       message receiving mode.
+received from server                  +QMTCFG: "recv/mode",<msg_recv_mode>[,<msg_len_en
+AT+QMTCFG="recv/mode",<client         able>]
+_idx>[,<msg_recv_mode>[,<msg_l
+en_enable>]]                          OK
+
+                                      If any of the optional parameters is specified, set the MQTT
+                                      message receiving mode:
+                                      OK
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                     10 / 30
+                                                                       LPWA Module Series
+                                             BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                       If there is any error:
+                                       ERROR
+Write Command                          Response
+Query/set Alibaba device information   If the optional parameters are omitted, query the device
+for AliCloud                           information:
+AT+QMTCFG="aliauth",<client_id         [+QMTCFG: "aliauth",<product_key>,<device_name>,<devi
+x>[,<product_key>,<device_name         ce_secret>]
+>,<device_secret>]
+                                       OK
+
+                                       If the optional parameters are specified, set the device
+                                       information:
+                                       OK
+
+                                       If there is any error:
+                                       ERROR
+Maximum Response Time                  300 ms
+                                       The command takes effect immediately.
+Characteristics
+                                       The configurations will not be saved.
+
+
+Parameter
+<client_idx>          Integer type. MQTT client identifier. Range: 0–5.
+<vsn>                 Integer type. MQTT protocol version.
+                      3      MQTT v3.1
+                      4      MQTT v3.1.1
+<cid>                 Integer type. The PDP to be used by the MQTT client. Range: 1–16. Default
+                      value : 1.
+<will_fg>             Integer type. Configure the Will flag.
+                      0      Ignore the Will flag configuration
+                      1      Require the Will flag configuration
+<will_qos>           Integer type. Quality of service for message delivery.
+                      0      At most once
+                      1      At least once
+                      2      Exactly once
+<will_retain>         Integer type. The Will retain flag is only used on PUBLISH messages.
+                      0 When a client sends a PUBLISH message to a server, the server will not hold
+                           on to the message after it has been delivered to the current subscribers
+                      1 When a client sends a PUBLISH message to a server, the server should hold
+                           on to the message after it has been delivered to the current subscribers
+<will_topic>          Will topic string. The maximum length is 255 bytes.
+<will_message>        String type. The Will message defines the content of the message that is
+                      published to the Will topic if the client is unexpectedly disconnected. It can be a
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                    11 / 30
+                                                                           LPWA Module Series
+                                                 BG95&BG77&BG600L Series MQTT Application Note
+
+
+                   zero-length message. The maximum length is 255 bytes.
+ <pkt_timeout>     Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                   second.
+ <retry_times>     Integer type. Retry times when packet delivery times out. Range: 0–10. Default
+                   value: 3.
+ <timeout_notice>  Integer type.
+                   0 Not report timeout message when transmitting packet
+                   1 Report timeout message when transmitting packet
+ <clean_session>   Integer type. Configure the session type.
+                   0 The server must store the subscriptions of the client after it is disconnected.
+                   1 The server must discard any previously maintained information about the
+                        client and treat the connection as “clean”.
+ <keep_alive_time> Integer type. Keep-alive time. Range: 0–3600. Default value: 120. Unit: second. It
+                   defines the maximum time interval between messages received from a client. If
+                   the server does not receive a message from the client within 1.5 times of the
+                   keep-alive time period, it disconnects the client as if the client has sent a
+                   DISCONNECT message. If the keep-alive value is 0, this means the server is not
+                   required to disconnect the client on the grounds of inactivity.
+ <SSL_enable>      Integer type. MQTT SSL mode.
+                   0 Use normal TCP connection for MQTT
+                   1 Use SSL TCP secure connection for MQTT
+ <ctx_index>       Integer type. SSL context index. Range: 0–5.
+ <msg_recv_mode> Integer type. The MQTT message receiving mode.
+                   0 MQTT message received from server will be contained in URC
+                   1 MQTT message received from server will not be contained in URC
+ <msg_len_enable> Integer type.
+                   0 Length of MQTT message received from server will not be contained in URC
+                   1 Length of MQTT message received from server will be contained in URC
+ <product_key>     Product key issued by AliCloud.
+ <device_name>     Device name issued by AliCloud.
+ <device_secret>   Device secret key issued by AliCloud.
+
+
+
+NOTES
+
+1.   If <will_fg>=1, then <will_qos>, <will_retain>, <will_topic> and <will_message> must be
+     specified. Otherwise they will be omitted.
+2.   <clean_session>=0 is only effective when the server supports the operation.
+3.   If MQTT connection is configured to SSL mode, <ctx_index> must be specified, and AT+QSSLCFG
+     must be used to configure the SSL version, cipher suite, secure level, CA certificate, client certificate,
+     client key and ignorance of RTC time, which will be used in MQTT SSL handshake procedure. For
+     more details of AT+QSSLCFG, please refer to Quectel_BG95&BG77_SSL_AT_Commands_Manual.
+4.   Care must be taken to ensure message delivery does not time out while it is still being sent.
+5.   AT+QMTCFG="aliauth" is only used for AliCloud. If it is configured, <username> and <password>
+     in AT+QMTCONN can be omitted.
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                          12 / 30
+                                                                       LPWA Module Series
+                                             BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+3.2.2. AT+QMTOPEN         Open a Network for MQTT Client
+
+This command opens a network for MQTT client.
+
+ AT+QMTOPEN         Open a Network for MQTT Client
+ Test Command                            Response
+ AT+QMTOPEN=?                            +QMTOPEN: (range of supported <client_idx>s),<host_n
+                                         ame>,(range of supported <port>s)
+
+                                         OK
+ Read Command                            Response
+ AT+QMTOPEN?                             [+QMTOPEN: <client_idx>,<host_name>,<port>]
+
+                                         OK
+ Write Command                           Response
+ AT+QMTOPEN=<client_idx>,<host_n         OK
+ ame>,<port>
+                                         +QMTOPEN: <client_idx>,<result>
+
+                                         If there is any error:
+                                         ERROR
+ Maximum Response Time                   Determined by network
+
+ Characteristics                         /
+
+
+
+Parameter
+
+ <client_idx>         Integer type. MQTT client identifier. Range: 0–5.
+ <host_name>          String type. The address of the server. It could be an IP address or a domain
+                      name. The maximum size is 100 bytes.
+ <port>               Integer type. The port number of the server. Range: 0–65535.
+ <result>             Integer type. Result of the command execution.
+                      -1 Failed to open network
+                      0 Network opened successfully
+                      1 Wrong parameter
+                      2 MQTT client identifier is occupied
+                      3 Failed to activate PDP
+                      4 Failed to parse domain name
+                      5 Network connection error
+
+
+
+3.2.3. AT+QMTCLOSE         Close a Network for MQTT Client
+
+This command closes a network for MQTT client.
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                               13 / 30
+                                                                        LPWA Module Series
+                                              BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+ AT+QMTCLOSE          Close a Network for MQTT Client
+ Test Command                             Response
+ AT+QMTCLOSE=?                            +QMTCLOSE: (range of supported <client_idx>s)
+
+                                          OK
+ Write Command                            Response
+ AT+QMTCLOSE=<client_idx>                 OK
+
+                                          +QMTCLOSE: <client_idx>,<result>
+
+                                          If there is any error:
+                                          ERROR
+ Maximum Response Time                    300 ms
+
+ Characteristics                          /
+
+
+
+Parameter
+
+ <client_idx>         Integer type. MQTT client identifier. Range: 0–5.
+ <result>             Integer type. Result of the command execution.
+                      -1      Failed to close network
+                      0       Network closed successfully
+
+
+
+3.2.4. AT+QMTCONN          Connect a Client to MQTT Server
+
+This command is used when a client requests a connection to MQTT server. When a TCP/IP socket
+connection is established from a client to a server, a protocol level session must be created using a
+CONNECT flow.
+
+ AT+QMTCONN          Connect a Client to MQTT Server
+ Test Command                             Response
+ AT+QMTCONN=?                             +QMTCONN: (range of supported <client_idx>s),<clientI
+                                          D>,<username>,<password>
+
+                                          OK
+ Read Command                             Response
+ AT+QMTCONN?                              [+QMTCONN: <client_idx>,<state>]
+
+                                          OK
+ Write Command                            Response
+ AT+QMTCONN=<client_idx>,<clientI         OK
+ D>[,<username>[,<password>]]
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                 14 / 30
+                                                                        LPWA Module Series
+                                              BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                          +QMTCONN: <client_idx>,<result>[,<ret_code>]
+
+                                          If there is any error:
+                                          ERROR
+ Maximum Response Time                    <pkt_timeout> (default 5 s), determined by network
+
+ Characteristics                          /
+
+
+
+Parameter
+
+ <client_idx>         Integer type. MQTT client identifier. Range: 0–5.
+ <clientID>           The client identifier string.
+ <username>           String type. User name of the client. It can be used for authentication.
+ <password>           String type. Password corresponding to the user name of the client. It can be
+                      used for authentication.
+ <result>             Integer type. Result of the command execution.
+                      0     Packet sent successfully and ACK received from server
+                      1     Packet retransmission
+                      2     Failed to send packet
+ <state>              Integer type. MQTT connection state.
+                      1     MQTT is initializing
+                      2     MQTT is connecting
+                      3     MQTT is connected
+                      4     MQTT is disconnecting
+ <ret_code>           Integer type. Connection status return code.
+                      0     Connection Accepted
+                      1     Connection Refused: Unacceptable Protocol Version
+                      2     Connection Refused: Identifier Rejected
+                      3     Connection Refused: Server Unavailable
+                      4     Connection Refused: Bad User Name or Password
+                      5     Connection Refused: Not Authorized
+ <pkt_timeout>        Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                      second.
+
+
+
+NOTES
+
+1. If a client with the same Client ID is already connected to the server, the "older" client must be
+   disconnected by the server before completing the CONNECT flow of the new client.
+2. AT+QMTCFG="aliauth" is only used for AliCloud. If it is configured, then <username> and
+   <password> in AT+QMTCONN can be omitted.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                   15 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+3.2.5. AT+QMTDISC Disconnect a Client from MQTT Server
+
+This command is used when a client requests a disconnection from MQTT server. A DISCONNECT
+message is sent from the client to the server to indicate that it is about to close its TCP/IP connection.
+
+ AT+QMTDISC Disconnect a Client from MQTT Server
+ Test Command                               Response
+ AT+QMTDISC=?                               +QMTDISC: (range of supported <client_idx>s)
+
+                                            OK
+ Write Command                              Response
+ AT+QMTDISC=<client_idx>                    OK
+
+                                            +QMTDISC: <client_idx>,<result>
+
+                                            If there is any error:
+                                            ERROR
+ Maximum Response Time                      300 ms
+
+ Characteristics                            /
+
+
+
+Parameter
+
+<client_idx>          Integer type. MQTT client identifier. Range: 0–5.
+<result>              Integer type. Result of the command execution
+                      -1        Failed to close connection
+                      0         Connection closed successfully
+
+
+
+3.2.6. AT+QMTSUB          Subscribe to Topics
+
+This command is used to subscribe to one or more topics. A SUBSCRIBE message is sent by a client to
+register an interest in one or more topic names with the server. Messages published to these topics are
+delivered from the server to the client as PUBLISH messages.
+
+ AT+QMTSUB         Subscribe to Topics
+ Test Command                             Response
+ AT+QMTSUB=?                              +QMTSUB: (range of supported <client_idx>s),(range of
+                                          supported <msgID>s),<topic>,(range of supported <qos>s)
+
+                                          OK
+ Write Command                            Response
+ AT+QMTSUB=<client_idx>,<msgID            OK
+ >,<topic1>,<qos1>[,<topic2>,<qos2
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                     16 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+ >…]                                       +QMTSUB: <client_idx>,<msgID>,<result>[,<value>]
+
+                                           If there is any error:
+                                           ERROR
+                                           <pkt_timeout> × <retry_times> (default 15 s), determined by
+ Maximum Response Time
+                                           network
+                                           The command takes effect immediately.
+ Characteristics
+                                           The configurations will not be saved.
+
+
+Parameter
+
+ <client_idx>           Integer type. MQTT client identifier. Range: 0–5.
+ <msgID>                Integer type. Message identifier of packet. Range: 1–65535.
+ <topic>                String type. The topic that the client wants to subscribe to or unsubscribe from.
+ <qos>                  Integer type. The QoS level at which the client wants to publish the messages.
+                        0 At most once
+                        1 At least once
+                        2 Exactly once
+ <result>               Integer type. Result of the command execution.
+                        0 Sent packet successfully and received ACK from server
+                        1 Packet retransmission
+                        2 Failed to send packet
+ <value>                If <result> is 0, it is a vector of granted QoS levels.
+                        If <result> is 1, it means the times of packet retransmission.
+                        If <result> is 2, it will not be presented.
+ <pkt_timeout>          Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                        second.
+ <retry_times>          Integer type. Retry times when packet delivery times out. Range: 0–10. Default
+                        value: 3.
+
+
+
+ NOTE
+
+The <msgID> is only present in messages where the QoS bits in the fixed header indicate QoS levels 1
+or 2. It must be unique amongst the set of "inflight" messages in a particular direction of communication. It
+typically increases by exactly one from one message to the next, but is not required to do so.
+
+
+
+3.2.7. AT+QMTUNS           Unsubscribe from Topics
+
+This command is used to unsubscribe from one or more topics. An UNSUBSCRIBE message is sent by
+the client to the server to unsubscribe from named topics.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                        17 / 30
+                                                                        LPWA Module Series
+                                              BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+ AT+QMTUNS         Unsubscribe from Topics
+ Test Command                            Response
+ AT+QMTUNS=?                             +QMTUNS: (range of supported <client_idx>s),(range of
+                                         supported <msgID>s),<topic>
+
+                                         OK
+ Write Command                           Response
+ AT+QMTUNS=<client_idx>,<msgID           OK
+ >,<topic1>[,<topic2>…]
+                                         +QMTUNS: <client_idx>,<msgID>,<result>
+
+                                         If there is any error:
+                                         ERROR
+                                         <pkt_timeout> × <retry_times> (default 15 s), determined by
+ Maximum Response Time
+                                         network
+                                         The command takes effect immediately.
+ Characteristics
+                                         The configurations will not be saved.
+
+
+Parameter
+
+ <client_idx>          Integer type. MQTT client identifier. Range: 0–5.
+ <msgID>               Integer type. Message identifier of packet. Range: 1–65535.
+ <topic>               String type. The topic that the client wants to subscribe to or unsubscribe from.
+ <result>              Integer type. Result of the command execution.
+                       0 Sent packet successfully and received ACK from server
+                       1 Packet retransmission
+                       2 Failed to send packet
+ <pkt_timeout>         Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                       second.
+ <retry_times>         Integer type. Retry times when packet delivery times out. Range: 0–10. Default
+                       value: 3.
+
+
+
+3.2.8. AT+QMTPUB Publish Messages
+
+This command publishes messages by a client to a server for distribution to interested subscribers. Each
+PUBLISH message is associated with a topic name. If a client subscribes to one or more topics, any
+message published to those topics are sent by the server to the client as a PUBLISH message.
+
+ AT+QMTPUB         Publish Messages
+ Test Command                             Response
+ AT+QMTPUB=?                              +QMTPUB: (range of supported <client_idx>s),(range of
+                                          supported <msgID>s),(range of supported <qos>s),(list of
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                    18 / 30
+                                                                    LPWA Module Series
+                                          BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                     supported  <retain>s),<topic>,(range         of    supported
+                                     <msglen>s)
+
+                                     OK
+Write Command                        Response
+Publish variable-length messages     >
+AT+QMTPUB=<client_idx>,<msgID>,      After > is responded, input the data to be sent. Tap Ctrl+Z to
+<qos>,<retain>,<topic>               send the data, and tap Esc to cancel the operation.
+                                     OK
+
+                                     +QMTPUB: <client_idx>,<msgID>,<result>[,<value>]
+
+                                     If there is any error:
+                                     ERROR
+Write Command                        Response
+Publish fixed-length messages        >
+AT+QMTPUB=<client_idx>,<msgID>,      After > is responded, input the data to be sent. The number of
+<qos>,<retain>,<topic>,<msglen>      bytes of input data must equal <msglen>.
+                                     OK
+
+                                     +QMTPUB: <client_idx>,<msgID>,<result>[,<value>]
+
+                                     If there is any error:
+                                     ERROR
+                                     <pkt_timeout> × <retry_times> (default 15 s), determined
+Maximum Response Time
+                                     by network
+Characteristics                      /
+
+
+
+Parameter
+
+<client_idx>      Integer type. MQTT client identifier. Range: 0–5.
+<msgID>           Integer type. Message identifier of packet. Range: 0–65535. It will be 0 only
+                  when <qos>=0.
+<qos>             Integer type. The QoS level at which the client wants to publish the messages.
+                  0 At most once
+                  1 At least once
+                  2 Exactly once
+<retain>          Integer type. Whether or not the server will retain the message after it has been
+                  delivered to the current subscribers.
+                  0 The server will not retain the message after it has been delivered to the
+                       current subscribers
+                  1 The server will retain the message after it has been delivered to the current
+                       subscribers
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                              19 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+ <topic>               String type. Topic that needs to be published.
+ <msglen>              Integer type. Length of the message to be published. Range: 1–4096. Unit: byte.
+ <result>              Integer type. Result of the command execution.
+                       0 Packet sent successfully and ACK received from server (message that
+                            published when <qos>=0 does not require ACK)
+                       1 Packet retransmission
+                       2 Failed to send packet
+ <value>               If <result> is 1, it means the times of packet retransmission.
+                       If <result> is 0 or 2, it will not be presented.
+ <pkt_timeout>         Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                       second.
+ <retry_times>         Integer type. Retry times when packet delivery times out. Range: 0–10. Default
+                       value: 3.
+
+
+
+NOTES
+1. If this command is executed successfully and gets OK back, the client can continue to publish new
+   packets. The maximum quantity of packet to be transmitted should not be greater than that of inflight
+   windows (5).
+2. After executing this command, the client will be ready to send data, which will be sent as payload. The
+   maximum length of the input data is 4096 bytes at a time and please tap Ctrl+Z to send the data.
+3. PUBLISH messages can be sent either from a publisher to the server, or from the server to a
+   subscriber. When a server publishes messages to a subscriber, the following URC will be returned to
+   notify the host to read the received data that is reported by MQTT server:
+   +QMTRECV: <client_idx>,<msgID>,<topic>,<payload>
+   For more details about the URC description, please refer to Chapter 4.2.
+
+
+
+3.2.9. AT+QMTPUBEX            Publish Messages
+
+This command publishes messages. It provides the same functions as AT+QMTPUB, except that the
+format is different.
+
+ AT+QMTPUBEX           Publish Messages
+ Test Command                              Response
+ AT+QMTPUBEX=?                             +QMTPUBEX: (range of supported <client_idx>s),( range of
+                                           supported <msgID>s),(range of supported <qos>s),(list of
+                                           supported <retain>s),<topic>,<msg>
+
+                                           OK
+ Write Command                             Response
+ AT+QMTPUBEX=<client_idx>,<msgI            OK
+ D>,<qos>,<retain>,<topic>,<msg>
+                                           +QMTPUB: <client_idx>,<msgID>,<result>[,<value>]
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                     20 / 30
+                                                                    LPWA Module Series
+                                          BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                      If there is any error:
+                                      ERROR
+                                      <pkt_timeout> × <retry_times> (default 15 s), determined
+Maximum Response Time
+                                      by network
+Characteristics                       /
+
+
+
+Parameter
+
+<client_idx>       Integer type. MQTT client identifier. Range: 0–5.
+<msgID>            Integer type. Message identifier of packet. Range: 0–65535. It will be 0 only
+                   when <qos>=0.
+<qos>              Integer type. The QoS level at which the client wants to publish the messages.
+                   0 At most once
+                   1 At least once
+                   2 Exactly once
+<retain>           Integer type. Whether or not the server will retain the message after it has been
+                   delivered to the current subscribers.
+                   0 The server will not retain the message after it has been delivered to the
+                        current subscribers
+                   1 The server will retain the message after it has been delivered to the current
+                        subscribers
+<topic>            String type. Topic that needs to be published.
+<msg>              String type. Message to be published. Maximum length is 560 bytes.
+<result>           Integer type. Result of the command execution.
+                   0 Packet sent successfully and ACK received from server (message that
+                        published when <qos>=0 does not require ACK)
+                   1 Packet retransmission
+                   2 Failed to send packet
+<value>            If <result> is 1, it means the times of packet retransmission.
+                   If <result> is 0 or 2, it will not be presented.
+<pkt_timeout>      Integer type. Timeout of the packet delivery. Range: 1–60. Default value: 5. Unit:
+                   second.
+<retry_times>      Integer type. Retry times when packet delivery times out. Range: 0–10. Default
+                   value: 3.
+
+
+
+ NOTE
+
+AT+QMTPUBEX is an extension command of AT+QMTPUB, and its response follows AT+QMTPUB.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                21 / 30
+                                                                      LPWA Module Series
+                                            BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+3.2.10. AT+QMTRECV       Read Messages from Buffers
+
+This command reads messages from storage buffer where the messages are stored when they are
+reported by the server.
+
+ AT+QMTRECV        Read Messages from Buffers
+ Test Command                          Response
+ AT+QMTRECV=?                          OK
+ Read Command                          Response
+ AT+QMTRECV?                           +QMTRECV: <client_idx>,<store_status_0>,<store_statu
+                                       s_1>,<store_status_2>,<store_status_3>,<store_status_
+                                       4>
+
+                                       OK
+
+                                       If there is no MQTT connection:
+                                       OK
+ Write Command                         Response
+ AT+QMTRECV=<client_idx>[,<recv_i      List of (+QMTRECV: <client_idx>,<msgID>,<topic>,[<pay
+ d>]                                   load_len>,]<payload>)s
+
+                                       OK
+
+                                       If there is no message received:
+                                       OK
+
+                                       If there is no MQTT connection:
+                                       ERROR
+ Maximum Response Time                 300 ms
+
+ Characteristics                       /
+
+
+
+Parameter
+
+ <client_idx>      Integer type. MQTT client identifier. Range: 0–5.
+ <store_status>    Integer type. Indicate whether there is a message stored in the buffer. 0 means no,
+                   and 1 means yes. The maximum quantity of message that can be stored in the
+                   buffer is 5. Therefore, URC reports maximally 5 messages simultaneously.
+ <recv_id>         Integer type. Indicate the serial number of every single message received. Range:
+                   0–4. All buffer data will be read if this parameter is not specified.
+ <msgID>           Integer type. Message identifier of packet. Range: 0–65535. It will be 0 only when
+                   <qos>=0.
+ <topic>           String type. Topic that needs to be published.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                 22 / 30
+                                                                   LPWA Module Series
+                                         BG95&BG77&BG600L Series MQTT Application Note
+
+
+<payload_len>    Integer type. The length of payload.
+<payload>        String type. The payload that relates to the topic name.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                   23 / 30
+                                                                         LPWA Module Series
+                                               BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+4 MQTT Related URCs
+This chapter gives MQTT related URCs and their descriptions.
+
+
+
+Table 1: MQTT Related URCs
+
+ SN    URC Format                                         Description
+                                                          When the state of MQTT link layer is changed,
+ [1]   +QMTSTAT: <client_idx>,<err_code>                  the client will close the MQTT connection and
+                                                          report the URC.
+       +QMTRECV: <client_idx>,<msgID>,<topic>,            Reported when the client has received the
+ [2]
+       <payload>                                          packet data from MQTT server.
+                                                          Reported when the message received from
+ [3]   +QMTRECV: <client_idx>,<recv_id>
+                                                          MQTT server has been stored in buffer.
+
+
+
+
+4.1. +QMTSTAT:           URC to Indicate State Change in MQTT Link Layer
+
+The URC begins with +QMTSTAT:. It will be reported when there is a change in the state of MQTT link
+layer.
+
+ +QMTSTAT:       URC to Indicate State Change in MQTT Link Layer
+ +QMTSTAT: <client_idx>,<err_code>          When the state of MQTT link layer is changed, the client will
+                                            close the MQTT connection and report the URC.
+
+
+Parameter
+ <client_idx>          Integer type. MQTT client identifier. Range: 0–5.
+ <err_code>            Integer type. An error code. Please refer to the table below for details.
+
+
+
+Table 2: Error Codes of +QMTSTAT: URC
+
+ <err_code>     Description                             How to do
+                The connection is closed or reset by    Execute AT+QMTOPEN command to reopen the
+ 1
+                a peer.                                 MQTT connection.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                      24 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+                Sending PINGREQ packet timed out           Deactivate PDP first, and then activate PDP and
+ 2
+                or failed.                                 reopen MQTT connection.
+                                                           1. Check whether the inputted user name and
+                                                              password are correct.
+                Sending CONNECT packet timed out
+ 3                                                         2. Make sure the client ID is not used.
+                or failed.
+                                                           3. Reopen MQTT connection and try to send
+                                                              CONNECT packet to the server again.
+                                                           1. Check whether the inputted user name and
+                                                              password are correct.
+                Receiving CONNACK packet timed
+ 4                                                         2. Make sure the client ID is not used.
+                out or failed.
+                                                           3. Reopen MQTT connection and try to send
+                                                              CONNECT packet to the server again.
+                The client sends DISCONNECT
+ 5              packet to sever and the server is          This is a normal process.
+                initiative to close MQTT connection.
+                The client takes the initiative to close   1. Make sure the data is correct.
+ 6              the MQTT connection due to packet          2. Try to reopen MQTT connection since there
+                sending failure all the time.                 may be network congestion or an error.
+                The link is not alive or the server is     Make sure the link is alive or the server is
+ 7
+                unavailable.                               available currently.
+ 8–255          Reserved for future use.
+
+
+
+
+4.2. +QMTRECV:             URC to Inform the Host to Read MQTT Packet Data
+
+The URC begins with +QMTRECV:. It is mainly used to inform the host to read the received MQTT packet
+data that is reported from MQTT server.
+
+ +QMTRECV:        URC to Inform the Host to Read MQTT Packet Data
+ +QMTRECV: <client_idx>,<msgID>,<            Notify the host to read the received data that is reported from
+ topic>,<payload>                            MQTT server.
+ +QMTRECV: <client_idx>,<recv_i              Notify that the message received from MQTT server has
+ d>                                          been stored in buffer.
+
+
+Parameter
+ <client_idx>           Integer type. MQTT client identifier. Range: 0–5.
+ <msgID>                Integer type. The message identifier of packet.
+ <topic>                String type. The topic that received from MQTT server.
+ <payload>              String type. The payload that relates to the topic name.
+ <recv_id>              Integer type. The serial number of every single message received. Range: 0–4.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                       25 / 30
+                                                                      LPWA Module Series
+                                            BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+5 Examples
+This chapter gives some examples to explain how to use MQTT related AT commands.
+
+
+
+
+5.1. Example of MQTT Operation without SSL
+
+AT+QMTCFG="aliauth",0,"oyjtmPl5a5j","MQTT_TEST","wN9Y6pZSIIy7Exa5qVzcmigEGO4kAazZ"
+                          //Configure Alibaba device information for AliCloud.
+OK
+AT+QMTOPEN=?
++QMTOPEN: (0-5),<host_name>,(0-65535)
+
+OK
+AT+QMTOPEN=0,"iot-as-mqtt.cn-shanghai.aliyuncs.com",1883         //Open a network for MQTT client.
+OK
+
++QMTOPEN: 0,0              //Opened the MQTT client network successfully.
+AT+QMTOPEN?
++QMTOPEN: 0,"iot-as-mqtt.cn-shanghai.aliyuncs.com",1883
+
+OK
+AT+QMTCONN=?
++QMTCONN: (0-5),<clientID>,<username>,<password>
+
+OK
+
+//Connect a client to MQTT server.
+//If AliCloud is connected, AT+QMTCFG="aliauth" can be used to configure the device information in
+advance, and there is no need to provide username/password here anymore.
+AT+QMTCONN=0,"clientExample"
+OK
+
++QMTCONN: 0,0,0             //Connected the client to MQTT server successfully.
+AT+QMTSUB=?
++QMTSUB: (0-5),(1-65535),<topic>,(0-2)
+
+OK
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                               26 / 30
+                                                                          LPWA Module Series
+                                                BG95&BG77&BG600L Series MQTT Application Note
+
+
+//Subscribe to topics.
+AT+QMTSUB=0,1,"topic/example",2
+OK
+
++QMTSUB: 0,1,0,2
+AT+QMTSUB=0,1,"topic/pub",0
+OK
+
++QMTSUB: 0,1,0,0
+
+//If a client subscribes to a topic and other devices publish the same topic to the server, the module will
+report the following information.
++QMTRECV: 0,0,"topic/example","This is the payload related to topic"
+
+//Unsubscribe from topics.
+AT+QMTUNS=0,1,"topic/example"
+OK
+
++QMTUNS: 0,2,0
+AT+QMTPUB=?
++QMTPUB : (0-5),(0-65535),(0-2),(0,1),<topic>,(1-4096)
+
+OK
+
+//Publish messages.
+AT+QMTPUB=0,0,0,0,"topic/pub"
+>This is test data, hello MQTT.        //After receiving >, input data This is test data, hello MQTT. and
+                                       then send it. The maximum length of the data is 4096 bytes and the
+                                       data that beyond 4096 bytes will be omitted. After inputting data,
+                                       tap Ctrl+Z to send.
+OK
+
++QMTPUB: 0,0,0
+
+//If a client subscribes to a topic named "topic/pub" and other devices publish the same topic to the server,
+the module will report the following information.
++QMTRECV: 0,0,"topic/pub","This is test data, hello MQTT."
+AT+QMTDISC=0                           //Disconnect a client from MQTT server.
+OK
+
++QMTDISC: 0,0                         //Connection closed successfully.
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                        27 / 30
+                                                                           LPWA Module Series
+                                                 BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+5.2. Example of MQTT Operation with SSL
+
+//Configure MQTT session into SSL mode.
+AT+QMTCFG="ssl",0,1,2
+OK
+
+//If SSL authentication mode is intended to be set as "manage server and client authentication if
+requested by the remote server" (<seclevel>=2 in AT+QSSLCFG), upload server root CA certificate,
+client certificate and client private key to UFS.
+AT+QFUPL="cacert.pem",1758,100                    //Upload CA certificate to UFS.
+CONNECT
+<Input the cacert.pem data, and the size is 1758 bytes>
++QFUPL: 1758,384a
+
+OK
+
+AT+QFUPL="client.pem",1220,100                 //Upload client certificate to UFS.
+CONNECT
+<Input the client.pem data, and the size is 1220 bytes>
++QFUPL: 1220,2d53
+
+OK
+AT+QFUPL="user_key.pem",1679,100               //Upload client private key to UFS.
+CONNECT
+<Input the user_key.pem data, and the size is 1679 bytes>
++QFUPL: 1679,335f
+
+OK
+
+//Configure the path of CA certificate for SSL context 2.
+AT+QSSLCFG="cacert",2,"cacert.pem"
+OK
+
+//Configure the path of client certificate for SSL context 2.
+AT+QSSLCFG="clientcert",2,"client.pem"
+OK
+
+//Configure the path of client private key for SSL context 2.
+AT+QSSLCFG="clientkey",2,"user_key.pem"
+OK
+
+//Configure the authentication mode for SSL context 2.
+AT+QSSLCFG="seclevel",2,2                   //SSL authentication mode: server and client authentication
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                                  28 / 30
+                                                                     LPWA Module Series
+                                           BG95&BG77&BG600L Series MQTT Application Note
+
+
+                                          if requested by the remote server
+OK
+AT+QSSLCFG="sslversion",2,4               //SSL authentication version
+OK
+AT+QSSLCFG="ciphersuite",2,0XFFFF         //Cipher suite
+OK
+AT+QSSLCFG="ignorelocaltime",2,1          //Ignore the time of authentication.
+OK
+
+//Start MQTT SSL connection
+AT+QMTOPEN=0,"a1zgnxur10j8ux.iot.us-east-1.amazonaws.com",8883
+OK
+
++QMTOPEN: 0,0
+
+//Connect to MQTT server
+AT+QMTCONN=0,"MQTT-1"
+OK
+
++QMTCONN: 0,0,0
+
+//Subscribe to topics.
+AT+QMTSUB=0,1,"$aws/things/ MQTT-1/shadow/update/accepted",1
+OK
+
++QMTSUB: 0,1,0,1
+
+//Publish messages.
+AT+QMTPUB=0,1,1,0,"$aws/things/MQTT-1/shadow/update/accepted"
+>This is publish data from client
+OK
+
++QMTPUB: 0,1,0
+
+//If a client subscribes to a topic named “$aws/things/MQTT-1/shadow/update/accepted” and other
+devices publish the same topic to the server, the module will report the following information.
++QMTRECV: 0,1,"$aws/things/MQTT-1/shadow/update/accepted","This is publish data from client"
+
+//Disconnect a client from MQTT server.
+AT+QMTDISC=0
+OK
+
++QMTDISC: 0,0
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                           29 / 30
+                                                                       LPWA Module Series
+                                             BG95&BG77&BG600L Series MQTT Application Note
+
+
+
+
+6 Appendix A References
+Table 3: Related Documents
+
+
+ SN     Document Name                                   Remarks
+
+ [1]    MQTT V3.1 Protocol Specification                MQTT protocol specification version 3.1
+
+ [2]    MQTT V3.1.1 Protocol Specification              MQTT protocol specification version 3.1.1
+
+
+
+Table 4: Terms and Abbreviations
+
+Abbreviation            Description
+
+ACK                     Acknowledgement
+
+CA                      Certificate Authority
+
+LPWA                    Low Power Wide Area
+
+MQTT                    Message Queuing Telemetry Transport
+
+QoS                     Quality of Service
+
+RAM                     Random Access Memory
+
+SSL                     Secure Sockets Layer
+
+TCP                     Transmission Control Protocol
+
+URC                     Unsolicited Result Code
+
+
+
+
+BG95&BG77&BG600L_Series_MQTT_Application_Note                                              30 / 30
+

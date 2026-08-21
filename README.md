@@ -13,11 +13,11 @@ Two NB-IoT / LTE-M sensor nodes plus shared UART/MQTT tooling.
 shared/          UART monitor, Railway MQTT helpers, PPK2 power
 mqtt/            Mosquitto + TCP-1883 Docker for Railway
 dashboard/       Fleet UI + MQTT→Postgres ingest (Railway web/ingest)
-docs/            Living AT / broker / telemetry notes
+docs/            Living AT / broker / telemetry notes (research consolidated here)
 PS-CB-NA/        Analog node (firmware, manuals, scripts)
 LTC2-CB/         Temp node (firmware, manuals, scripts)
-archive/         One-off experiments, research, debug zips, scrapes
-logs/            Session captures (gitignored)
+archive/         One-off experiments, debug zips, scrapes (not living docs)
+logs/            Session captures (gitignored; no separate logs-openfw/)
 ```
 
 ## Setup
@@ -97,7 +97,10 @@ Device-specific notes: [PS-CB-NA/README.md](PS-CB-NA/README.md), [LTC2-CB/README
 | [docs/AT_COMMANDS_HANDOFF.md](docs/AT_COMMANDS_HANDOFF.md) | PS-CB-NA MQTT / ThingsBoard AT sequence |
 | [docs/RAILWAY_MQTT.md](docs/RAILWAY_MQTT.md) | Self-hosted Mosquitto on Railway + dashboard services |
 | [dashboard/README.md](dashboard/README.md) | Fleet UI + ingest env / deploy notes |
-| [docs/HIVEMQ_BROKER_SWITCH.md](docs/HIVEMQ_BROKER_SWITCH.md) | Why SERVADDR jumps to HiveMQ |
+| [docs/HIVEMQ_AND_BROKER_PERSISTENCE.md](docs/HIVEMQ_AND_BROKER_PERSISTENCE.md) | Why SERVADDR jumps to HiveMQ / broker persistence |
+| [docs/SERIAL_UPLOAD_DIAGNOSTICS.md](docs/SERIAL_UPLOAD_DIAGNOSTICS.md) | `Failed to send` after upload — serial diagnosis |
+| [docs/VODAFONE_CONNECTIVITY.md](docs/VODAFONE_CONNECTIVITY.md) | Vodafone GDSP SIM, APN, operator ACL |
+| [docs/LLM_SENSOR_SETUP_MANUAL.md](docs/LLM_SENSOR_SETUP_MANUAL.md) | Fedora host setup, flash, SIM, broker handoff |
 | [docs/TELEMETRY_8_SLOTS.md](docs/TELEMETRY_8_SLOTS.md) | CLOCKLOG / 8-slot history |
 
 ## Hardware notes
@@ -105,4 +108,4 @@ Device-specific notes: [PS-CB-NA/README.md](PS-CB-NA/README.md), [LTC2-CB/README
 - SW1 = **Flash** for normal use (ISP only when flashing)
 - USB-TTL: GND↔GND, TX↔RX, RX↔TX
 - Device sleeps between uplinks; console may be quiet until TX / ACT / `AT+DEBUG=1`
-- After any `AT+PRO=…` (especially `3,3`), re-check `AT+SERVADDR` — see HiveMQ doc
+- After any `AT+PRO=…` (especially `3,3`), re-check `AT+SERVADDR` — see [docs/HIVEMQ_AND_BROKER_PERSISTENCE.md](docs/HIVEMQ_AND_BROKER_PERSISTENCE.md)

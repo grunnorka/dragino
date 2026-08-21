@@ -1,0 +1,69 @@
+---v1.2.1
+1.Fixed the issue where the AT+PRO=3,1 data had one decimal place; it will now have three decimal places.
+2.Fixed the issue where AT+REDPT settings were lost after device reset.
+
+
+---v1.2.0
+1. OTA wireless upgrade.
+2. TLS Certificate Writing Function.
+3. The default QOS level of MQTT is set to 0.
+4. Optimize DNS domain name resolution to prevent errors.
+5. Modify the JSON format of the MQTT downlink. 
+  (https://wiki.dragino.com/xwiki/bin/view/Main/General%20Configure%20to%20Connect%20to%20IoT%20server%20for%20-NB%20%26%20-NS%20NB-IoT%20models/#H7.2.7A0StandardJSONDownlinkFormat)
+
+
+---v1.1.4
+1. Add NTP function
+2. Add COPS function, which automatically sets the operator for each packet to prevent loss of operator code and signal loss
+3. Expand the stack size to prevent stack overflow
+4. Modify bugs where the signal exceeds the range
+5. Firmware upgrades will retain configurations with the same product ID, while configurations with different product IDs will be cleared
+6. Add automatic reset function for long-term undetected signals
+7. Unified JSON format downlink function
+8. Add a JSON format downlink command "Event: Status", which will send a device version data packet
+9. When receiving a downlink in JSON format, a successful uplink packet will be returned
+10. Fix the issue of network disconnection caused by certain operators activating PDP in Europe
+11. Add SNI server name indication function
+12. Due to the COAP protocol client's inability to use excessively long path URI, the function of deleting 3 URI entries is necessary to save flash space
+
+---v1.1.3
+1.AT+ROC adds mode 3.
+2.Fixed COAP mode HEX mode.
+
+---v1.1.2
+1.The original configuration is retained when updating the firmware version.
+2.Fixed an issue where MQTT connection failure occasionally occurred.
+3.Added AT+ROC threshold alarm function.
+
+
+--v1.1.1
+1.Added current value conversion in JSON format.(Only applicable to AT+PROBE=00xx,AT+PROBE=01xx,AT+PROBE=02xx)
+2.The delay time of the three commands AT+3V3T, AT+5VT, and AT+12VT is increased from the maximum 65.535 seconds to 180 seconds.
+3.Added AT+BKDNS command.
+
+--v1.1.0
+1.Updated D-BG95-002 of NB-IoT stack:
+1) Network Information is displayed when accessing the network
+2) Fix bugs where commands such as AT+UNAME display errors
+3) The software automatically removes spaces to prevent customers from filling in the wrong address
+4) Support TE UDP issuance, add command AT+DOWNTE.
+5) Added a function to prevent devices from crashing during sleep, accidentally resetting, or being unable to enter sleep mode due to power failure
+6) The AT+SERVADDR command adds formatting restrictions to prevent customers from filling in errors.
+7) Remove GE and 1D versions from the device name and unify them into one version, for example, PS-CB-GE becomes PS-CB
+8) Add IMSI number in payload format
+9) Change the GPS positioning search time from the default 120 seconds to 60 seconds
+10) GPS debugging optimization, adding GPS on/off, fix timeouts, location information and other functions
+11) Change the interrupt delivery logic of CB products
+12) Increase the TDC interval for subsequent reconnection after network access failure
+13) Add time to the current data payload in JSON format
+14) Save password to flash as the new DRAGINO NB bootloader V1.3 Bluetooth upgrade requires password password (AT-PIN)
+15)Change the DNS length limit from 19 to 40 characters.
+
+2. Added AT+QBAND command to set frequency band.
+3. Added AT+IOTMOD to configure network categories searched under LTE RAT.
+4. Improve JSON formatting.
+5.Fixed the issue that the configuration changes cannot be saved when the MQTT downlink {AT+COMMAND} contains the ATZ command.
+
+--v1.0.2
+1.Added UDP hexadecimal downlink command.
+2.Fixed the issue where the payload has no GPS positioning.

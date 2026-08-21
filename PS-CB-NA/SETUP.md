@@ -2,7 +2,9 @@
 
 **Audience:** LLM agents or humans configuring this unit from a cold start (no prior chat context).  
 **Device:** Dragino **PS-CB-NA** (analog mA/V → `idc_input` / `vdc_input`)  
-**Validated firmware:** **PS-CB_v1.2.0** (`firmware/PS-CB_v1.2.0.hex`) · stack **D-BG95-003**  
+**Validated firmware:** **v1.2.1** (`firmware/PS-CB-NA_v1.2.1.hex`) · stack **D-BG95-004** · modem **BG95-M2**  
+**Current session status:** see [HANDOFF.md](HANDOFF.md) first (what is done, what is still broken).  
+**Flashing / bootloader recovery:** see [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md)  
 **Target broker:** Railway Mosquitto — see [../docs/RAILWAY_MQTT.md](../docs/RAILWAY_MQTT.md)  
 **Do not** paste real passwords into logs or commits. Load secrets from env files only.
 
@@ -10,8 +12,10 @@ Related deep-dives (do not duplicate here):
 
 | Doc | When to open |
 |---|---|
-| [../docs/HIVEMQ_BROKER_SWITCH.md](../docs/HIVEMQ_BROKER_SWITCH.md) | `SERVADDR` jumped to `broker.hivemq.com` |
-| [../archive/research/DEBUG_REPORT_FAILED_TO_SEND.md](../archive/research/DEBUG_REPORT_FAILED_TO_SEND.md) | Serial shows `Failed to send` after upload |
+| [HANDOFF.md](HANDOFF.md) | **Start here** — live status, open issue, next tests |
+| [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md) | Flashing, bootloader recovery, dark/no-LED device, AT-over-UART pitfalls |
+| [../docs/HIVEMQ_AND_BROKER_PERSISTENCE.md](../docs/HIVEMQ_AND_BROKER_PERSISTENCE.md) | `SERVADDR` jumped to `broker.hivemq.com` |
+| [../docs/SERIAL_UPLOAD_DIAGNOSTICS.md](../docs/SERIAL_UPLOAD_DIAGNOSTICS.md) | Serial shows `Failed to send` after upload |
 | [../docs/AT_COMMANDS_HANDOFF.md](../docs/AT_COMMANDS_HANDOFF.md) | Older ThingsBoard (`PRO=3,3`) AT shapes |
 | [../docs/RAILWAY_MQTT.md](../docs/RAILWAY_MQTT.md) | Broker proxy host/port, smoke tests |
 
@@ -38,6 +42,14 @@ python shared/session_monitor.py --device ps-cb --policy stable --cycles 3
 python PS-CB-NA/scripts/configure_pscb_railway.py
 python PS-CB-NA/scripts/configure_pscb_tb_pro35.py   # includes ATZ persistence check
 python PS-CB-NA/scripts/observe_uplink_cycles.py --port COM8   # observe-only
+```
+
+On Linux, prefer the newer pair (they parse `AT+CFG` as one authoritative dump and
+prompt on screen for every RESET press):
+
+```bash
+.venv/bin/python PS-CB-NA/scripts/fix_pscb_mqtt.py           # repair only what is wrong
+.venv/bin/python PS-CB-NA/scripts/reset_and_apply_pscb.py    # AT+FDR1, then write everything
 ```
 
 **Unlock:** `shared/monitor.py --unlock-now` sends the PIN but marks unlocked **only** after `Password Correct`.  
@@ -96,7 +108,7 @@ Copy template if needed: `railway-mqtt.env.example` → `railway-mqtt.local.env`
 | **`AT+BKDNS` sticky IP** | Old HiveMQ IPs can remain as failover. Pin Railway IP or clear after broker change. |
 | **`Failed to send` after `Upload data successfully`** | Often **TCP teardown false positive** — treat **Upload success** (+ MQTT message) as ground truth. |
 | **`Failed to send` + Signal/CSQ 99, no Upload success** | **Real radio / attach fail** — wait for attach, check SIM/APN; **`ATZ`** can recover radio. |
-| **`AT+FDR` / `AT+FDR1`** | Factory wipe → demo defaults again. **Do not use** unless intentional. |
+| **`AT+FDR` / `AT+FDR1`** | Factory wipe → demo defaults again. **Do not use** unless intentional. Measured on v1.2.1: `FDR1` only resets `PRO`, `TDC`, `MQOS`, `BKDNS` and returns **no `OK`** (it reboots first) — see [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md) §8. |
 | **COM exclusive** | Only one process may hold COM8; close monitors before flash or parallel scripts. |
 | **TDC** | `AT+TDC=120` is fine for testing; restore a longer interval for production (e.g. 180 / 1800). |
 
@@ -117,8 +129,9 @@ Copy template if needed: `railway-mqtt.env.example` → `railway-mqtt.local.env`
 | TLS | Off → `AT+TLSMOD=0,0` |
 | QoS | `1` |
 | Profile | **`AT+PRO=3,5`** (JSON) |
-| TDC (test) | `120` seconds |
-| Firmware | `PS-CB_v1.2.0` |
+| TDC (test) | `120` seconds (this unit is left at `180`) |
+| APN | unset — `AT+APN=NULL` (see §5) |
+| Firmware | `PS-CB-NA_v1.2.1` |
 
 Prefer **IP** for `SERVADDR` / `BKDNS` on this carrier path (`66.33.22.220,33239`). Hostname form also works if DNS is reliable:
 
@@ -180,14 +193,21 @@ AT+PRO=3,0
 
 Then the same `SERVADDR` / auth / topics / `BKDNS` / `TDC` block as above.
 
-### Optional APN (only if SIM requires it)
+### APN — leave unset on this unit
 
 ```text
 AT+APN=?
-AT+APN=<APN_FOR_THIS_SIM>
 ```
 
-Example seen on this workspace SIM family: `lpwa.vodafone.is` — **confirm for the SIM in the device**; do not invent.
+This unit's SIM is **Vodafone GDSP** (IMSI prefix `90128`, a global IoT roaming
+SIM), **not 1NCE**. The network supplies the APN, so `AT+APN` must stay `NULL`.
+Measured: with `NULL` the PDP context activates first try and DNS/NTP succeed;
+setting `iot.1nce.net` causes `Failed to activate PDP context` +
+`DNS configuration failed`. Note `AT+APN=` (empty) is **not** the same as `NULL` —
+clear it with `AT+APN=NULL` and confirm via `AT+CFG`.
+
+Only set an APN if a different SIM genuinely requires one — **confirm for the SIM
+in the device; do not invent.** See [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md) §7.
 
 ---
 
@@ -299,15 +319,18 @@ AT+TDC=180
 
 ## 8. Firmware update
 
-**When:** Dragino recommends upgrade if `Failed to send` persists after switching off `PRO=3,3`; this workspace target is **v1.2.0**.
+**When:** Dragino recommends upgrade if `Failed to send` persists after switching off `PRO=3,3`; this workspace target is **v1.2.1**.
+
+**Full procedure, pitfalls and bootloader recovery: [FIRMWARE_UPDATE.md](FIRMWARE_UPDATE.md).**
 
 | Item | Path / note |
 |---|---|
-| Image | `PS-CB-NA/firmware/PS-CB_v1.2.0.hex` |
-| Mode | SW1 = **ISP** (no console; LED/firmware idle until flash done) |
-| Tool | **STM32CubeProgrammer** (GUI or CLI) |
-| Address | `.hex` carries addresses — let the programmer auto-place (do not invent offsets) |
-| After flash | SW1 back to **Flash**, power-cycle / RESET, unlock, re-apply section 5 |
+| Image | `PS-CB-NA/firmware/PS-CB-NA_v1.2.1.hex` (app, `0x08007800`) |
+| Bootloader | `PS-CB-NA/firmware/DRAGINO_NB_bootloader_v1.3.bin` (`0x08000000`) |
+| Mode | SW1 = **ISP** (no console; LED off until flash done — expected) |
+| Tool | `PS-CB-NA/scripts/recover_pscb.py` (Linux) or **STM32CubeProgrammer** |
+| Address | `.hex` carries addresses — never relocate. A `.bin` app **must** be placed at `0x08007800`, or it erases the bootloader and the device goes dark. |
+| After flash | SW1 back to **Flash**, RESET, unlock, **re-apply section 5** (flashing resets config to factory defaults) |
 
 Official steps (do not duplicate the full guide here):
 
@@ -315,7 +338,7 @@ Official steps (do not duplicate the full guide here):
 - BLE OTA alternative: [BLE upgrade](https://wiki.dragino.com/docs/NB-IoT/firmware-update/ble-upgrade-for-nb-iot-lte-m-end-node/)
 - Product page: [PS-CB-NA wiki](https://wiki.dragino.com/docs/NB-IoT/rs485-sdi-12-sensor-nodes/ps-cb-na/)
 
-Close any process holding the COM port before CubeProgrammer connects. After upgrade, confirm version via boot banner / `AT+CFG` / Image Version string (`v1.2.0`).
+Close any process holding the COM port before CubeProgrammer connects. After upgrade, confirm version via boot banner / `AT+CFG` / Image Version string (`v1.2.1`).
 
 ---
 
@@ -331,6 +354,7 @@ Close any process holding the COM port before CubeProgrammer connects. After upg
 - [ ] Run **`ATZ`** and re-check SERVADDR survives
 - [ ] Watch ≥2 uplink cycles: serial **Upload success** + MQTT on `dragino/ps-cb/up`
 - [ ] Treat post-success `Failed to send` as teardown noise unless Upload never appeared
+- [ ] If TCP opens but no `Successfully connected to the server`, see [HANDOFF.md](HANDOFF.md) (CONNACK issue — not a port block)
 - [ ] Restore longer TDC before leaving the device in production
 
 ### Don't
@@ -339,10 +363,13 @@ Close any process holding the COM port before CubeProgrammer connects. After upg
 - [ ] **Don't** assume SERVADDR sticks without an ATZ check after PRO changes
 - [ ] **Don't** leave `broker.hivemq.com` or HiveMQ IPs in SERVADDR/BKDNS
 - [ ] **Don't** run `AT+FDR` / `AT+FDR1` casually
+- [ ] **Don't** use `AT+APN=` (empty); clear with `AT+APN=NULL` on this SIM
+- [ ] **Don't** assume Railway port 33239 is carrier-blocked — TCP has opened from this unit
 - [ ] **Don't** paste real PIN / MQTT password into README, commits, or shared logs
 - [ ] **Don't** declare radio healthy on Signal/CSQ **99** with no Upload success
 - [ ] **Don't** hold COM open in two tools at once
 - [ ] **Don't** invent credentials — if env missing, stop and ask
+- [ ] **Don't** re-flash a healthy board to “fix” MQTT; config and firmware are already good
 
 ---
 
@@ -354,10 +381,13 @@ AT+SERVADDR=66.33.22.220,33239
 AT+BKDNS=1,0,66.33.22.220,33239
 AT+CLIENT=ps-cb
 AT+UNAME=<MQTT_USER>
+AT+PWD=<MQTT_PASS>
 AT+PUBTOPIC=dragino/ps-cb/up
 AT+SUBTOPIC=dragino/ps-cb/down
 AT+TLSMOD=0,0
-AT+TDC=120          # test; raise for production
+AT+MQOS=1
+AT+TDC=180
+AT+APN=NULL
 ```
 
-After `ATZ`, the same SERVADDR/PRO must still read back. Uplink: `Upload data successfully` on serial and a message on Railway topic `dragino/ps-cb/up`.
+After `ATZ`, the same SERVADDR/PRO must still read back. Uplink: `Upload data successfully` on serial and a message on Railway topic `dragino/ps-cb/up`. If TCP opens but there is no `Successfully connected to the server`, see [HANDOFF.md](HANDOFF.md).

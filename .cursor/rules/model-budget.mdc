@@ -1,0 +1,18 @@
+---
+description: Model selection preference — use cheaper models for light work, reserve K3 for heavy tasks
+alwaysApply: true
+---
+
+# Model budget (user preference, 2026-08-17)
+
+K3 (kimi-k3-max) is heavy usage — do NOT spend it on routine work.
+
+- **Light work** (quick questions, small edits, status checks, simple file
+  reads/summaries, coordination): use **Composer** (`composer-2.5-fast`).
+- **Substantial coding** (firmware implementation, multi-file refactors,
+  reverse-engineering analysis): use **Kimi Code** (`kimi-k2.7-code`).
+- **K3** (`kimi-k3-max`): only when the task genuinely needs top-tier
+  reasoning (e.g. subtle binary RE, hard debugging) or the user asks for it.
+
+When delegating to subagents, pass the cheaper `model` slug that fits the
+task instead of inheriting the parent model by default.

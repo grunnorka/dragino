@@ -1,6 +1,0 @@
-READY: AT command handoff complete for serial agent.
-Primary manual MD: C:\Users\Arnor\Downloads\dragino\PPS-CB-NA - NB-IoT_LTE-M Analog Sensor.md
-Structured extract: C:\Users\Arnor\Downloads\dragino\PPS-CB-NA_NB-IoT_LTE-M_Analog_Sensor.md
-Handoff: C:\Users\Arnor\Downloads\dragino\AT_COMMANDS_HANDOFF.md
-Related: C:\Users\Arnor\Downloads\dragino\HIVEMQ_BROKER_SWITCH.md
-Note: workspace PDF is a 9KB stub; use the companion .md as source of truth. AT+BKDNS is documented in NB stack notes (not product AT table) but present on this firmware.

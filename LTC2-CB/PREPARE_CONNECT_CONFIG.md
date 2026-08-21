@@ -22,9 +22,10 @@ Official wiki mirror: [LTC1/LTC2-CB](https://wiki.dragino.com/docs/NB-IoT/temper
 
 Cross-check lessons (PPS-CB-NA / shared stack):
 
-- `../archive/research/RESEARCH_DEVICE_UPLOAD_CONFIG.md`
+- `../docs/LLM_SENSOR_SETUP_MANUAL.md`
 - `../docs/AT_COMMANDS_HANDOFF.md`
-- `../docs/HIVEMQ_BROKER_SWITCH.md`
+- `../docs/HIVEMQ_AND_BROKER_PERSISTENCE.md`
+- `../docs/TELEMETRY_8_SLOTS.md`
 
 ---
 

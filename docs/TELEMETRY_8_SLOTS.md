@@ -88,6 +88,8 @@ Serial confirmation (same shape as Type=3 manual example), e.g. `logs/20260806_1
 | **c** | **Sampling interval in minutes** (`0`–`255`) | **`15`** → ~15 min between inner timestamps |
 | **d** | **How many history entries in each TDC uplink** (max **32**) | **`8`** → keys `1`–`8` |
 
+On firmware **v1.2.1**, parameter `c` is stored in a single byte. Values above **255 wrap** (e.g. `360` becomes `104`). Use `240` minutes (4 h) as the practical maximum.
+
 Examples from the manual:
 
 - `AT+CLOCKLOG=1,65535,1,3` → sample every **1 min**, uplink last **3** records  
@@ -99,7 +101,7 @@ Examples from the manual:
 | Setting | Role |
 | --- | --- |
 | **`AT+TDC=<seconds>`** | How often the device **publishes** (MQTT uplink). Here **`180`** = every **3 minutes**. Does **not** set the ~15 min sample spacing. |
-| **`AT+PRO=3,3`** | MQTT + **ThingsBoard payload type**. Same numbered history keys appear in Type=5 JSON; Type=3 is the TB-oriented profile (and rewrites default server — see `HIVEMQ_BROKER_SWITCH.md`). |
+| **`AT+PRO=3,3`** | MQTT + **ThingsBoard payload type**. Same numbered history keys appear in Type=5 JSON; Type=3 is the TB-oriented profile (and rewrites default server — see `HIVEMQ_AND_BROKER_PERSISTENCE.md`). |
 | **`AT+STDC=…`** | Different feature: burst multiple IDC **or** VDC reads, then one uplink. **Not** the source of keys `1`–`8`. |
 | **`AT+CDP`** | Read / clear the cached historical records (up to 32). |
 
@@ -172,4 +174,4 @@ AT+TDC=180                               # publish cadence only
 
 - `../PS-CB-NA/manuals/PPS-CB-NA - NB-IoT_LTE-M Analog Sensor.md` — §2.2.1 notice (entries 1–8), §2.2.3 Type=3 example, §3.9 CLOCKLOG, §3.8 STDC, §3.11 CDP  
 - CFG / LDATA: `logs/20260806_123854_cfg_verify.raw.log` and related `*_cfg_*.raw.log` / `*_mqtt_*.raw.log`  
-- Broker/profile context: `HIVEMQ_BROKER_SWITCH.md`, `AT_COMMANDS_HANDOFF.md`
+- Broker/profile context: `HIVEMQ_AND_BROKER_PERSISTENCE.md`, `AT_COMMANDS_HANDOFF.md`

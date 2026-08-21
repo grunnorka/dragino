@@ -1,0 +1,370 @@
+{
+  "ruleChain": {
+    "name": "Dragino",
+    "type": "CORE",
+    "firstRuleNodeId": null,
+    "root": false,
+    "debugMode": false,
+    "configuration": null,
+    "additionalInfo": {
+      "description": "PS-CB / PS-CB-NA: unpack CLOCKLOG keys 1–N into historical timeseries, compute depth from server attr probe_full_scale_cm, route identity/GPS/alarms to client attributes."
+    }
+  },
+  "metadata": {
+    "version": 3,
+    "firstNodeIndex": 9,
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode",
+        "name": "Save Timeseries",
+        "debugSettings": {
+          "failuresEnabled": false,
+          "allEnabled": false,
+          "allEnabledUntil": 0
+        },
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "defaultTTL": 0,
+          "processingSettings": {
+            "type": "ON_EVERY_MESSAGE"
+          }
+        },
+        "additionalInfo": {
+          "description": null,
+          "layoutX": 1220,
+          "layoutY": 271
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "Save Attributes",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 3,
+        "configuration": {
+          "scope": "CLIENT_SCOPE",
+          "notifyDevice": false,
+          "processingSettings": {
+            "type": "ON_EVERY_MESSAGE"
+          },
+          "sendAttributesUpdatedNotification": false,
+          "updateAttributesOnlyOnValueChange": false
+        },
+        "additionalInfo": {
+          "layoutX": 1220,
+          "layoutY": 167
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+        "name": "Message Type Switch",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "version": 0
+        },
+        "additionalInfo": {
+          "layoutX": 566,
+          "layoutY": 302
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "Log RPC from Device",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "TBEL",
+          "jsScript": "return '\\nIncoming message:\\n' + JSON.stringify(msg) + '\\nIncoming metadata:\\n' + JSON.stringify(metadata);",
+          "tbelScript": "return '\\nIncoming message:\\n' + JSON.stringify(msg) + '\\nIncoming metadata:\\n' + JSON.stringify(metadata);"
+        },
+        "additionalInfo": {
+          "layoutX": 1000,
+          "layoutY": 381
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "Log Other",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "TBEL",
+          "jsScript": "return '\\nIncoming message:\\n' + JSON.stringify(msg) + '\\nIncoming metadata:\\n' + JSON.stringify(metadata);",
+          "tbelScript": "return '\\nIncoming message:\\n' + JSON.stringify(msg) + '\\nIncoming metadata:\\n' + JSON.stringify(metadata);"
+        },
+        "additionalInfo": {
+          "layoutX": 1000,
+          "layoutY": 494
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.rpc.TbSendRPCRequestNode",
+        "name": "RPC Call Request",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "timeoutInSeconds": 60
+        },
+        "additionalInfo": {
+          "layoutX": 1000,
+          "layoutY": 583
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbOriginatorTypeFilterNode",
+        "name": "Is Entity Group",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "originatorTypes": [
+            "ENTITY_GROUP"
+          ]
+        },
+        "additionalInfo": {
+          "layoutX": 255,
+          "layoutY": 301
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbMsgTypeFilterNode",
+        "name": "Post attributes or RPC request",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "messageTypes": [
+            "POST_ATTRIBUTES_REQUEST",
+            "RPC_CALL_FROM_SERVER_TO_DEVICE"
+          ]
+        },
+        "additionalInfo": {
+          "layoutX": 319,
+          "layoutY": 109
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbDuplicateMsgToGroupNode",
+        "name": "Duplicate To Group Entities",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "entityGroupId": null,
+          "entityGroupIsMessageOriginator": true
+        },
+        "additionalInfo": {
+          "layoutX": 627,
+          "layoutY": 108
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.profile.TbDeviceProfileNode",
+        "name": "Device Profile Node",
+        "debugSettings": {
+          "failuresEnabled": false,
+          "allEnabled": false,
+          "allEnabledUntil": 0
+        },
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "persistAlarmRulesState": false,
+          "fetchAlarmRulesStateOnStart": "false"
+        },
+        "additionalInfo": {
+          "description": "Process incoming messages from devices with the alarm rules defined in the device profile. Dispatch all incoming messages with \"Success\" relation type.",
+          "layoutX": 137,
+          "layoutY": 415
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.flow.TbRuleChainInputNode",
+        "name": "Generate Report",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "ruleChainId": "de99bb90-45dd-11ee-b301-c5c7b1481d12",
+          "forwardMsgToDefaultRuleChain": false
+        },
+        "additionalInfo": {
+          "description": "Forwards message to the \"Generate Report\" rule chain",
+          "layoutX": 1000,
+          "layoutY": 690
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "Get probe_full_scale_cm",
+        "debugSettings": {
+          "failuresEnabled": false,
+          "allEnabled": false,
+          "allEnabledUntil": 0
+        },
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 1,
+        "configuration": {
+          "fetchTo": "METADATA",
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "probe_full_scale_cm"
+          ],
+          "latestTsKeyNames": [],
+          "getLatestValueWithTs": false,
+          "tellFailureIfAbsent": false
+        },
+        "additionalInfo": {
+          "description": "Loads server attribute probe_full_scale_cm (e.g. 100 or 200). Missing → script defaults to 100.",
+          "layoutX": 780,
+          "layoutY": 220
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "Parse Dragino uplink",
+        "debugSettings": {
+          "failuresEnabled": false,
+          "allEnabled": false,
+          "allEnabledUntil": 0
+        },
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "scriptLang": "TBEL",
+          "jsScript": "var ATTR_KEYS = ['IMEI', 'IMSI', 'Model', 'latitude', 'longitude', 'gps_time', 'idc_alarm', 'vdc_alarm'];\nvar LIVE_KEYS = ['idc_input', 'vdc_input', 'battery', 'signal', 'interrupt', 'interrupt_level', 'time'];\n\nfunction toNumber(v) {\n  if (v === null || v === undefined || v === '') return null;\n  var n = Number(v);\n  return isNaN(n) ? null : n;\n}\n\nfunction parseScaleCm(md) {\n  var raw = md['ss_probe_full_scale_cm'];\n  var n = toNumber(raw);\n  if (n === null || n <= 0) return 100;\n  return n;\n}\n\nfunction depthFromIdc(idc, scaleCm) {\n  var n = toNumber(idc);\n  if (n === null || n < 4) return null;\n  var depth = (n - 4) / 16 * scaleCm;\n  if (depth < 0) depth = 0;\n  if (depth > scaleCm) depth = scaleCm;\n  return depth;\n}\n\nfunction applyDepth(values, idc, scaleCm) {\n  var depthCm = depthFromIdc(idc, scaleCm);\n  if (depthCm === null) return values;\n  values['depth_cm'] = Math.round(depthCm * 1000) / 1000;\n  values['depth_mm'] = Math.round(depthCm * 10 * 1000) / 1000;\n  return values;\n}\n\nfunction isoToTs(iso) {\n  if (iso === null || iso === undefined || iso === '') return null;\n  var t = new Date(String(iso)).getTime();\n  return isNaN(t) ? null : t;\n}\n\nfunction copyMetadata(md) {\n  var out = {};\n  for (var k in md) {\n    if (Object.prototype.hasOwnProperty.call(md, k)) out[k] = md[k];\n  }\n  return out;\n}\n\nvar scaleCm = parseScaleCm(metadata);\nvar outs = [];\n\nvar attrMsg = {};\nvar hasAttr = false;\nfor (var ai = 0; ai < ATTR_KEYS.length; ai++) {\n  var ak = ATTR_KEYS[ai];\n  if (msg[ak] !== undefined && msg[ak] !== null) {\n    attrMsg[ak] = msg[ak];\n    hasAttr = true;\n  }\n}\nif (hasAttr) {\n  outs.push({\n    msg: attrMsg,\n    metadata: copyMetadata(metadata),\n    msgType: 'POST_ATTRIBUTES_REQUEST'\n  });\n}\n\nvar liveValues = {};\nfor (var li = 0; li < LIVE_KEYS.length; li++) {\n  var lk = LIVE_KEYS[li];\n  if (msg[lk] !== undefined && msg[lk] !== null) {\n    liveValues[lk] = msg[lk];\n  }\n}\nliveValues = applyDepth(liveValues, msg['idc_input'], scaleCm);\n\nvar telemetryPoints = [];\nvar liveTs = isoToTs(msg['time']);\nif (Object.keys(liveValues).length > 0) {\n  if (liveTs !== null) {\n    telemetryPoints.push({ ts: liveTs, values: liveValues });\n  } else {\n    var liveMeta = copyMetadata(metadata);\n    outs.push({\n      msg: liveValues,\n      metadata: liveMeta,\n      msgType: 'POST_TELEMETRY_REQUEST'\n    });\n  }\n}\n\nfor (var i = 1; i <= 32; i++) {\n  var key = String(i);\n  var slot = msg[key];\n  if (slot === undefined || slot === null) continue;\n  if (!Array.isArray(slot) || slot.length < 3) continue;\n  var idc = slot[0];\n  var vdc = slot[1];\n  var sampleTs = isoToTs(slot[2]);\n  if (sampleTs === null) continue;\n  var hist = { idc_input: idc, vdc_input: vdc };\n  hist = applyDepth(hist, idc, scaleCm);\n  telemetryPoints.push({ ts: sampleTs, values: hist });\n}\n\nif (telemetryPoints.length > 0) {\n  outs.push({\n    msg: telemetryPoints,\n    metadata: copyMetadata(metadata),\n    msgType: 'POST_TELEMETRY_REQUEST'\n  });\n}\n\nif (outs.length === 0) {\n  return { msg: msg, metadata: metadata, msgType: msgType };\n}\nreturn outs;",
+          "tbelScript": "var ATTR_KEYS = ['IMEI', 'IMSI', 'Model', 'latitude', 'longitude', 'gps_time', 'idc_alarm', 'vdc_alarm'];\nvar LIVE_KEYS = ['idc_input', 'vdc_input', 'battery', 'signal', 'interrupt', 'interrupt_level', 'time'];\n\nvar scaleCm = 100.0;\nif (metadata.ss_probe_full_scale_cm != null) {\n    var parsedScale = Double.parseDouble(metadata.ss_probe_full_scale_cm);\n    if (parsedScale > 0) {\n        scaleCm = parsedScale;\n    }\n}\n\nvar outs = [];\n\nvar attrMsg = {};\nvar hasAttr = false;\nforeach (ak: ATTR_KEYS) {\n    if (msg[ak] != null) {\n        attrMsg[ak] = msg[ak];\n        hasAttr = true;\n    }\n}\nif (hasAttr) {\n    outs.add({\n        msg: attrMsg,\n        metadata: metadata,\n        msgType: 'POST_ATTRIBUTES_REQUEST'\n    });\n}\n\nvar liveValues = {};\nforeach (lk: LIVE_KEYS) {\n    if (msg[lk] != null) {\n        liveValues[lk] = msg[lk];\n    }\n}\nif (msg.idc_input != null) {\n    var liveIdc = Double.parseDouble(String.valueOf(msg.idc_input));\n    if (liveIdc >= 4.0) {\n        var liveDepth = (liveIdc - 4.0) / 16.0 * scaleCm;\n        if (liveDepth < 0.0) {\n            liveDepth = 0.0;\n        }\n        if (liveDepth > scaleCm) {\n            liveDepth = scaleCm;\n        }\n        liveValues['depth_cm'] = Math.round(liveDepth * 1000.0) / 1000.0;\n        liveValues['depth_mm'] = Math.round(liveDepth * 10.0 * 1000.0) / 1000.0;\n    }\n}\n\nvar telemetryPoints = [];\nvar liveTs = null;\nif (msg.time != null) {\n    liveTs = new Date(String.valueOf(msg.time)).getTime();\n}\nif (liveValues.size() > 0) {\n    if (liveTs != null && liveTs > 0) {\n        telemetryPoints.add({\n            ts: liveTs,\n            values: liveValues\n        });\n    } else {\n        outs.add({\n            msg: liveValues,\n            metadata: metadata,\n            msgType: 'POST_TELEMETRY_REQUEST'\n        });\n    }\n}\n\nvar i = 1;\nwhile (i <= 32) {\n    var key = String.valueOf(i);\n    var slot = msg[key];\n    if (slot != null && slot instanceof List && slot.size() >= 3) {\n        var sampleTs = new Date(String.valueOf(slot[2])).getTime();\n        if (sampleTs != null && sampleTs > 0) {\n            var hist = {};\n            hist['idc_input'] = slot[0];\n            hist['vdc_input'] = slot[1];\n            var histIdc = Double.parseDouble(String.valueOf(slot[0]));\n            if (histIdc >= 4.0) {\n                var histDepth = (histIdc - 4.0) / 16.0 * scaleCm;\n                if (histDepth < 0.0) {\n                    histDepth = 0.0;\n                }\n                if (histDepth > scaleCm) {\n                    histDepth = scaleCm;\n                }\n                hist['depth_cm'] = Math.round(histDepth * 1000.0) / 1000.0;\n                hist['depth_mm'] = Math.round(histDepth * 10.0 * 1000.0) / 1000.0;\n            }\n            telemetryPoints.add({\n                ts: sampleTs,\n                values: hist\n            });\n        }\n    }\n    i = i + 1;\n}\n\nif (telemetryPoints.size() > 0) {\n    outs.add({\n        msg: telemetryPoints,\n        metadata: metadata,\n        msgType: 'POST_TELEMETRY_REQUEST'\n    });\n}\n\nif (outs.size() == 0) {\n    return {\n        msg: msg,\n        metadata: metadata,\n        msgType: msgType\n    };\n}\nreturn outs;"
+        },
+        "additionalInfo": {
+          "description": "Splits identity/GPS/alarms to attributes; unpacks CLOCKLOG 1–32 into [{ts,values}] telemetry; adds depth_cm/depth_mm from probe_full_scale_cm while keeping raw idc/vdc.",
+          "layoutX": 980,
+          "layoutY": 220
+        }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+        "name": "Route parsed",
+        "debugSettings": null,
+        "singletonMode": false,
+        "queueName": null,
+        "configurationVersion": 0,
+        "configuration": {
+          "version": 0
+        },
+        "additionalInfo": {
+          "description": "Routes script outputs: Post attributes → Save Attributes, Post telemetry → Save Timeseries.",
+          "layoutX": 1100,
+          "layoutY": 220
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromIndex": 2,
+        "toIndex": 11,
+        "type": "Post telemetry"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 1,
+        "type": "Post attributes"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 3,
+        "type": "RPC Request from Device"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 4,
+        "type": "Other"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 5,
+        "type": "RPC Request to Device"
+      },
+      {
+        "fromIndex": 2,
+        "toIndex": 10,
+        "type": "Generate Report"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 2,
+        "type": "False"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 7,
+        "type": "True"
+      },
+      {
+        "fromIndex": 7,
+        "toIndex": 2,
+        "type": "False"
+      },
+      {
+        "fromIndex": 7,
+        "toIndex": 8,
+        "type": "True"
+      },
+      {
+        "fromIndex": 8,
+        "toIndex": 2,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 9,
+        "toIndex": 6,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 11,
+        "toIndex": 12,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 11,
+        "toIndex": 12,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 12,
+        "toIndex": 13,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 13,
+        "toIndex": 0,
+        "type": "Post telemetry"
+      },
+      {
+        "fromIndex": 13,
+        "toIndex": 1,
+        "type": "Post attributes"
+      }
+    ],
+    "ruleChainConnections": null
+  }
+}

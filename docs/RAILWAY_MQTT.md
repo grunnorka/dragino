@@ -33,6 +33,23 @@ Railway **TCP Proxy cannot bind public port 1883** (or any chosen public port). 
 * **LTC2 (2026-08-07):** `SERVADDR=54.36.178.49,1883` (`test.mosquitto.org`) — serial showed `Failed to open the MQTT client network` then later `Opened MQTT` → `Failed to send` (never `Successfully connected`). Port 1883 alone does not clear uplink on that IMSI/path.
 * **PS-CB-NA v1.2.1 (2026-08-16):** config correct and persisted; TCP to `:33239` **does** open; still no `Successfully connected to the server` / no broker messages. Open issue is MQTT `CONNECT`/`CONNACK`, not “port blocked”. Live status: [`PS-CB-NA/HANDOFF.md`](../PS-CB-NA/HANDOFF.md).
 
+## Proxy diagnostics (from network probes, 2026-08-17)
+
+The Railway TCP proxy is a **plain, fast, tolerant TCP pass-through** to mosquitto. TLS is refused; plaintext MQTT is required.
+
+| Measurement | Result |
+|---|---|
+| TLS handshake | **Refused** — keep `AT+TLSMOD=0,0` |
+| Plaintext `CONNECT` → `CONNACK` | **~40 ms** from a normal PC WAN path |
+| Rapid connect cycles | No rate limit, no stragglers |
+| Direct IP (`66.33.22.220:33239`) | Identical to hostname path |
+| First-byte deadline | Any `CONNECT` within ~30 s of TCP open is fine |
+| Idle timeout | ~30 s of total silence → clean FIN; any traffic resets it |
+| Fragmentation | 500 ms inter-byte gaps still accepted |
+| Cold start | `sleepApplication=false`; warm CONNACK after 11 min idle |
+
+**Device-side interpretation:** when the firmware logs `Failed to send` ~4.5 s after `Opened the MQTT client network successfully`, the proxy is not the blocker. The likely cause is the firmware’s own `CONNECT`→`CONNACK` timeout being too short for NB-IoT RTT (often 1.5–10 s under marginal coverage), or packet loss on the carrier/modem path. See **Proxy diagnostics** above and [SERIAL_UPLOAD_DIAGNOSTICS.md](SERIAL_UPLOAD_DIAGNOSTICS.md) for serial-side triage.
+
 ## Local files
 
 | Path | Role |

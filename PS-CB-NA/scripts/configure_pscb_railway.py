@@ -37,10 +37,12 @@ def main() -> None:
     load_env(ROOT / "railway-mqtt.local.env")
     pin = os.environ["DRAGINO_PIN"].strip()
     mqtt_pass = os.environ["MQTT_PASS"].strip()
+    uart_port = os.environ.get("DRAGINO_PORT", "COM8").strip()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     logpath = ROOT / "logs" / f"{stamp}_pscb_railway_config.raw.log"
-    ser = serial.Serial("COM8", 9600, timeout=0.2)
-    print(f"Opened COM8; log={logpath}", flush=True)
+    logpath.parent.mkdir(exist_ok=True)
+    ser = serial.Serial(uart_port, 9600, timeout=0.2)
+    print(f"Opened {uart_port}; log={logpath}", flush=True)
     buf = b""
 
     def log(tag: str, s: str) -> None:
