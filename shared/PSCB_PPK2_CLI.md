@@ -37,6 +37,13 @@ These three facts drive the whole design; ignore them and results lie.
    banner (`[BOOT-A]`, `Image Version:`). Boot checks wait up to
    `--settle-seconds` (default 45) and return as soon as the banner appears.
 
+4. **A sleeping board can be phantom-powered by the FTDI.** In STOP mode the board draws
+   <0.5 mA, and the FTDI's idle-high TX line feeds it through the MCU RX pin when the PPK2
+   switches off: a "power cycle" then does nothing (uptime keeps counting). The CLI holds every
+   UART it has open in **break** (TX low) while the DUT is off, and the off time is 3 s. A
+   board left in STOP with the console *closed* can still be kept alive by the FTDI: unplug it
+   (or keep a CLI process holding break) for a guaranteed cold start.
+
 The PPK2 sends its calibration metadata only once per USB session. After a
 `--keep-power` exit the next run loads it from
 `~/.cache/pscb-ppk2/modifiers-<serial>.txt` (`current_summary.modifiers` says
@@ -107,7 +114,7 @@ make flash-ppk2
 | `--ppk` | `auto` | PPK2 ACM port, or discover (waits up to 6 s for re-enumeration) |
 | `--uart` | `$DRAGINO_PORT` or `/dev/ttyUSB0` | FTDI console/ISP |
 | `--voltage-mv` | `3600` | Source voltage (warns above 3600) |
-| `--off-seconds` | `2` | DUT off time during a cycle |
+| `--off-seconds` | `3` | DUT off time during a cycle |
 | `--settle-seconds` | `45` | Max wait for the app banner after power-on |
 | `--hold-seconds` | `0` | Keep DUT ON (PPK2 + console held) after success |
 | `--keep-power` | off | Leave DUT powered after exit (see above) |

@@ -69,7 +69,7 @@ except ImportError as e:
 DEFAULT_UART = os.environ.get("DRAGINO_PORT", "/dev/ttyUSB0")
 DEFAULT_MV = 3600          # PS-CB-NA rating is ~2.6-3.6 V; BG95 VBAT min is 3.3 V
 RATED_MAX_MV = 3600
-DEFAULT_OFF_S = 2.0
+DEFAULT_OFF_S = 3.0
 DEFAULT_BOOT_TIMEOUT_S = 45.0   # bootloader modem probe alone takes ~27 s
 CONSOLE_BAUD = 9600
 ISP_BAUD = 115200
@@ -85,6 +85,30 @@ MODIFIER_CACHE_DIR = Path.home() / ".cache" / "pscb-ppk2"
 BOOTLOADER_MARKER = "DRAGINO NB bootloader"
 # Any of these means the application (openfw or stock) is running
 APP_MARKERS = ("[BOOT-A]", "SensorManual", "Image Version:")
+
+
+# UART handles to hold in break (TX low) while the DUT is unpowered. A board
+# asleep in STOP draws so little that the FTDI's idle-high TX line feeds it
+# through the MCU RX pin's protection diode and it never resets.
+_QUIET_UARTS: list = []
+
+
+def register_uart(ser) -> None:
+    if ser not in _QUIET_UARTS:
+        _QUIET_UARTS.append(ser)
+
+
+def unregister_uart(ser) -> None:
+    if ser in _QUIET_UARTS:
+        _QUIET_UARTS.remove(ser)
+
+
+def _uart_break(on: bool) -> None:
+    for ser in list(_QUIET_UARTS):
+        try:
+            ser.break_condition = on
+        except Exception:
+            pass
 
 
 def _utc_now() -> str:
@@ -524,12 +548,19 @@ class PpkSession:
         print("DUT OFF", flush=True)
 
     def cycle(self, off_seconds: float = DEFAULT_OFF_S, phase: str = "cycle") -> float:
-        """DUT off, wait, on. Returns the host time of power-on."""
+        """DUT off, wait, on. Returns the host time of power-on.
+
+        Registered UARTs are held in break (TX low) while off so the FTDI
+        cannot phantom-power a sleeping board; the break's start bit also
+        wakes it from STOP so its supply collapses quickly.
+        """
         self.set_phase(f"{phase}_off")
+        _uart_break(True)
         with self._wr:
             self.ppk.toggle_DUT_power("OFF")
         print(f"DUT OFF ({off_seconds}s)...", flush=True)
         time.sleep(off_seconds)
+        _uart_break(False)
         with self._wr:
             self.ppk.toggle_DUT_power("ON")
         t_on = time.time()
@@ -557,6 +588,7 @@ class ConsoleHold:
         s.dtr = False
         s.open()
         self.ser = s
+        register_uart(s)
         self._lock = threading.Lock()
         self._lines: list[tuple[float, str]] = []
         self._partial = b""
@@ -644,6 +676,7 @@ class ConsoleHold:
         later reset of a still-powered DUT boots the app, not ROM ISP)."""
         self._stop.set()
         self._thread.join(timeout=1.0)
+        unregister_uart(self.ser)
         _set_hupcl(self.ser, hangup=not keep_rts)
         try:
             self.ser.close()
@@ -677,7 +710,11 @@ def isp_sync(uart: str, isp_rts: bool, ppk: PpkSession, off_seconds: float) -> b
         conn.serial_connection.rts = isp_rts
         time.sleep(0.05)
         conn.serial_connection.rts = isp_rts
-        ppk.cycle(off_seconds, phase="isp")
+        register_uart(conn.serial_connection)
+        try:
+            ppk.cycle(off_seconds, phase="isp")
+        finally:
+            unregister_uart(conn.serial_connection)
         time.sleep(0.8)
         conn.serial_connection.rts = isp_rts
         conn.flush_imput_buffer()
@@ -706,11 +743,13 @@ def do_flash(uart: str, hex_path: Path, isp_rts: bool, ppk: PpkSession, off_seco
 
     # Fresh ISP entry for the write
     hold = _hold_rts(uart, isp_rts, ISP_BAUD)
+    register_uart(hold)
     try:
         ppk.cycle(off_seconds, phase="flash_isp")
         time.sleep(0.8)
         hold.rts = isp_rts
     finally:
+        unregister_uart(hold)
         hold.close()
 
     print(f"Flash {len(data)} bytes @ 0x{addr:08X}", flush=True)
