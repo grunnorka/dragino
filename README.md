@@ -45,6 +45,13 @@ Run scripts from the **repo root** so `.env` / `logs/` resolve correctly.
 ## Shared tools
 
 ```powershell
+# PS-CB-NA: PPK2 source-meter + RTS/ISP automated flash (agent CLI)
+# Full usage: shared/PSCB_PPK2_CLI.md
+python shared/pscb_ppk2_cli.py flash-run --hex ..\ps-cb-openfw\build\pscb-openfw.hex
+python shared/pscb_ppk2_cli.py cycle --voltage-mv 3700 --hold-seconds 30
+python shared/pscb_ppk2_cli.py monitor --seconds 60 --current-log logs\ppk2.jsonl
+# stdout: RESULT_JSON {...}  ·  exit 0 success / 1 fail / 3 hardware missing
+
 # Preferred: fused serial unlock + Railway MQTT (one process, summary JSON)
 python shared/session_monitor.py --device ps-cb --policy stable --cycles 3
 python shared/session_monitor.py --device ltc2 --policy quiet --cycles 2
