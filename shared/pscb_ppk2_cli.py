@@ -239,6 +239,10 @@ class CurrentSampler:
             self._fh.close()
             self._fh = None
 
+    def total_samples(self) -> int:
+        with self._lock:
+            return sum(st.n for st in self._stats.values()) + len(self._recent)
+
     def recent_avg(self, seconds: float = 0.5) -> Optional[float]:
         cutoff = time.time() - seconds
         with self._lock:
@@ -440,7 +444,37 @@ class PpkSession:
 
         dut_on=False leaves the DUT unpowered (callers that power-cycle next
         do not need an extra boot). Returns the spot average in uA when on.
+
+        A process started right after another one closed the PPK2 can open
+        the old ACM node just before the PPK2 resets and re-enumerates; every
+        later write then goes nowhere. So the sample stream is checked and,
+        if silent, the port is rediscovered and the arm redone once.
         """
+        for attempt in (1, 2):
+            avg = self._arm_once(current_log, dut_on)
+            deadline = time.time() + 1.5
+            while time.time() < deadline and self.sampler and self.sampler.total_samples() == 0:
+                time.sleep(0.1)
+            if self.sampler and self.sampler.total_samples() > 0:
+                return avg
+            if attempt == 2:
+                raise RuntimeError("PPK2 is not streaming samples after reopen")
+            print("PPK2 not streaming (stale handle during re-enumeration?); reopening", flush=True)
+            if self.sampler:
+                self.sampler.stop()
+                self.sampler = None
+            try:
+                self.ppk.ser.close()
+            except Exception:
+                pass
+            time.sleep(2.0)
+            self.port = _discover_ppk("auto")
+            self.ppk = PPK2_API(self.port, timeout=1, write_timeout=1)
+            self.ppk.ser.timeout = 0.2
+            self.serial_number = self._serial_number(self.port)
+        return None
+
+    def _arm_once(self, current_log: Optional[Path], dut_on: bool) -> Optional[float]:
         self._soft_stop()
         self.modifiers_source = self._load_modifiers()
         if not self.modifiers_source:
