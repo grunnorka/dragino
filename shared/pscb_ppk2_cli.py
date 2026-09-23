@@ -6,9 +6,17 @@ Requires:
   - FTDI USB-TTL on the console/ISP UART, with RTS wired to the Flash/ISP
     (BOOT0) switch: RTS=False -> ISP, RTS=True -> Flash (empirically confirmed)
 
-Important: the PPK2 serial port must stay open while DUT power is needed.
-Closing the port (or exiting this process without --hold-seconds) typically
-drops source output (LED back to green).
+Bench facts (measured 2026-09-23, see PSCB_PPK2_CLI.md):
+  - BOOT0 follows RTS. A *closed* UART port releases RTS, which is the ISP
+    level, so the board only boots the app while this CLI holds the console
+    port open with RTS at the Flash level. Every command that powers the DUT
+    therefore holds the console (unless --no-uart / --boot-mode isp).
+  - Closing the PPK2 port drops DTR, which resets the PPK2 (USB re-enumerates,
+    ~1 s) and cuts DUT power (LED back to green). Every invocation therefore
+    cold-boots the board. --hold-seconds keeps it up while the CLI runs;
+    --keep-power closes with DTR left up so the DUT stays powered after exit.
+  - Dragino bootloader v1.3 probes the modem for ~27 s before it starts the
+    app; the openfw banner arrives ~28 s after power-on.
 
 Exit codes:
   0  success
@@ -23,8 +31,8 @@ Examples (from dragino repo root, with .venv):
       --result logs/flash-result.json \\
       --current-log logs/ppk2-current.jsonl
 
-  .venv/bin/python shared/pscb_ppk2_cli.py cycle --voltage-mv 3700
-  .venv/bin/python shared/pscb_ppk2_cli.py monitor --seconds 30 --current-log logs/i.jsonl
+  .venv/bin/python shared/pscb_ppk2_cli.py boot
+  .venv/bin/python shared/pscb_ppk2_cli.py monitor --seconds 120
 """
 from __future__ import annotations
 
@@ -38,6 +46,11 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+try:
+    import termios
+except ImportError:  # Windows: HUPCL control unavailable
+    termios = None
 
 # Repo paths
 _HERE = Path(__file__).resolve().parent
@@ -54,27 +67,69 @@ except ImportError as e:
     raise SystemExit(2) from e
 
 DEFAULT_UART = os.environ.get("DRAGINO_PORT", "/dev/ttyUSB0")
-DEFAULT_MV = 3700
+DEFAULT_MV = 3600          # PS-CB-NA rating is ~2.6-3.6 V; BG95 VBAT min is 3.3 V
+RATED_MAX_MV = 3600
 DEFAULT_OFF_S = 2.0
+DEFAULT_BOOT_TIMEOUT_S = 45.0   # bootloader modem probe alone takes ~27 s
 CONSOLE_BAUD = 9600
 ISP_BAUD = 115200
+PPK_SAMPLE_RATE = 100_000       # PPK2 streams 100 kS/s
+LOG_WINDOW_S = 0.05             # one JSONL record per window
 # Empirically: RTS asserted (True) = Flash/normal; deasserted (False) = ISP
 DEFAULT_ISP_RTS = False
+
+# The PPK2 answers GET_META_DATA only once per USB session, so after a
+# --keep-power exit (no reset) calibration must come from this cache.
+MODIFIER_CACHE_DIR = Path.home() / ".cache" / "pscb-ppk2"
+
+BOOTLOADER_MARKER = "DRAGINO NB bootloader"
+# Any of these means the application (openfw or stock) is running
+APP_MARKERS = ("[BOOT-A]", "SensorManual", "Image Version:")
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _discover_ppk(explicit: Optional[str]) -> str:
-    if explicit and explicit != "auto":
-        if not Path(explicit).exists() and not explicit.upper().startswith("COM"):
-            raise FileNotFoundError(f"PPK2 port not found: {explicit}")
-        return explicit
-    devs = PPK2_API.list_devices()
-    if not devs:
-        raise FileNotFoundError("No PPK2 found (VID 1915:C00A)")
-    return devs[0]
+def _discover_ppk(explicit: Optional[str], wait_s: float = 6.0) -> str:
+    """Find the PPK2. Waits out the ~1 s USB re-enumeration the PPK2 does
+    whenever a previous process closed its port with DTR dropped."""
+    deadline = time.time() + wait_s
+    while True:
+        if explicit and explicit != "auto":
+            if Path(explicit).exists() or explicit.upper().startswith("COM"):
+                return explicit
+        else:
+            devs = PPK2_API.list_devices()
+            if devs:
+                return devs[0]
+        if time.time() >= deadline:
+            raise FileNotFoundError(
+                f"PPK2 port not found: {explicit}" if explicit and explicit != "auto"
+                else "No PPK2 found (VID 1915:C00A)"
+            )
+        time.sleep(0.25)
+
+
+def _set_hupcl(ser: "serial.Serial", hangup: bool) -> None:
+    """HUPCL decides whether closing the port drops DTR/RTS.
+
+    PPK2: a DTR drop resets it (USB re-enumerates) and cuts DUT power.
+    FTDI: dropping RTS moves BOOT0 to the ISP level. The flag persists on the
+    tty across opens, so every close sets it explicitly.
+    """
+    if termios is None:
+        return
+    try:
+        fd = ser.fileno()
+        attrs = termios.tcgetattr(fd)
+        if hangup:
+            attrs[2] |= termios.HUPCL
+        else:
+            attrs[2] &= ~termios.HUPCL
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+    except Exception:
+        pass
 
 
 @dataclass
@@ -98,6 +153,8 @@ class RunResult:
     uart: str = ""
     steps: list[dict[str, Any]] = field(default_factory=list)
     current_log: Optional[str] = None
+    console_log: Optional[str] = None
+    current_summary: Optional[dict[str, Any]] = None
     error: Optional[str] = None
 
     def add(self, step: StepResult) -> None:
@@ -118,37 +175,58 @@ class RunResult:
         print("RESULT_JSON " + json.dumps(payload, sort_keys=True), flush=True)
 
 
-class CurrentLogger:
-    """Background sampler: writes JSONL records while PPK2 is measuring."""
+class _PhaseStats:
+    __slots__ = ("n", "sum", "min", "max", "t_first", "t_last")
 
-    def __init__(
-        self,
-        ppk: PPK2_API,
-        path: Optional[Path],
-        phase: str = "idle",
-        io_lock: Optional[threading.Lock] = None,
-    ):
+    def __init__(self) -> None:
+        self.n = 0
+        self.sum = 0.0
+        self.min = float("inf")
+        self.max = float("-inf")
+        self.t_first = 0.0
+        self.t_last = 0.0
+
+    def add(self, samples: list[float], now: float) -> None:
+        if not self.n:
+            self.t_first = now
+        self.t_last = now
+        self.n += len(samples)
+        self.sum += sum(samples)
+        self.min = min(self.min, min(samples))
+        self.max = max(self.max, max(samples))
+
+
+class CurrentSampler:
+    """Sole reader of the PPK2 stream while armed.
+
+    Reads in a tight loop so the full 100 kS/s is captured (the old
+    read-4 KiB-then-sleep loop kept ~20% and lagged ~0.5 s). Aggregates
+    LOG_WINDOW_S windows into JSONL and keeps per-phase totals for the
+    result summary. Windows never straddle a phase change.
+    """
+
+    def __init__(self, ppk: PPK2_API, path: Optional[Path], voltage_mv: int, phase: str = "armed"):
         self.ppk = ppk
         self.path = path
-        self.phase = phase
-        self._io_lock = io_lock or threading.Lock()
+        self.voltage_mv = voltage_mv
+        self._phase = phase
+        self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
-        self._meta_lock = threading.Lock()
-        self.last_avg_uA: Optional[float] = None
-        self.sample_count = 0
+        self._stats: dict[str, _PhaseStats] = {}
+        self._recent: list[tuple[float, float, int]] = []  # (ts, sum_uA, n) per window
+        self._fh = None
+        self.t_start = 0.0
         if path:
             path.parent.mkdir(parents=True, exist_ok=True)
-            # truncate / start fresh for this session
-            path.write_text("", encoding="utf-8")
+            self._fh = open(path, "w", encoding="utf-8")
 
     def set_phase(self, phase: str) -> None:
-        with self._meta_lock:
-            self.phase = phase
+        with self._lock:
+            self._phase = phase
 
     def start(self) -> None:
-        if not self.path:
-            return
+        self.t_start = time.time()
         self._thread = threading.Thread(target=self._run, name="ppk2-current", daemon=True)
         self._thread.start()
 
@@ -157,52 +235,99 @@ class CurrentLogger:
         if self._thread:
             self._thread.join(timeout=3.0)
             self._thread = None
+        if self._fh:
+            self._fh.close()
+            self._fh = None
+
+    def recent_avg(self, seconds: float = 0.5) -> Optional[float]:
+        cutoff = time.time() - seconds
+        with self._lock:
+            rows = [r for r in self._recent if r[0] >= cutoff]
+        n = sum(r[2] for r in rows)
+        return sum(r[1] for r in rows) / n if n else None
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            items = list(self._stats.items())
+        v = self.voltage_mv / 1000.0
+        phases: dict[str, Any] = {}
+        tot_n = 0
+        tot_sum = 0.0
+        for name, st in items:
+            charge_uC = st.sum / PPK_SAMPLE_RATE  # uA * (1/fs) s
+            phases[name] = {
+                "avg_uA": round(st.sum / st.n, 2),
+                "min_uA": round(st.min, 2),
+                "max_uA": round(st.max, 2),
+                "samples": st.n,
+                "seconds": round(st.n / PPK_SAMPLE_RATE, 3),
+                "charge_uC": round(charge_uC, 1),
+                "energy_mJ": round(charge_uC * v / 1000.0, 3),
+            }
+            tot_n += st.n
+            tot_sum += st.sum
+        wall = (time.time() - self.t_start) if self.t_start else 0.0
+        charge_uC = tot_sum / PPK_SAMPLE_RATE
+        return {
+            "voltage_mv": self.voltage_mv,
+            "capture_rate_sps": round(tot_n / wall) if wall else 0,
+            "total": {
+                "avg_uA": round(tot_sum / tot_n, 2) if tot_n else None,
+                "samples": tot_n,
+                "seconds": round(tot_n / PPK_SAMPLE_RATE, 3),
+                "charge_uC": round(charge_uC, 1),
+                "energy_mJ": round(charge_uC * (self.voltage_mv / 1000.0) / 1000.0, 3),
+            },
+            "phases": phases,
+        }
+
+    def _emit(self, phase: str, samples: list[float], now: float) -> None:
+        s = sum(samples)
+        with self._lock:
+            st = self._stats.setdefault(phase, _PhaseStats())
+            st.add(samples, now)
+            self._recent.append((now, s, len(samples)))
+            if len(self._recent) > 400:  # ~20 s of windows
+                del self._recent[:100]
+        if self._fh:
+            rec = {
+                "ts": round(now, 3),
+                "t": round(now - self.t_start, 3),
+                "uA": round(s / len(samples), 3),
+                "n": len(samples),
+                "min_uA": round(min(samples), 3),
+                "max_uA": round(max(samples), 3),
+                "phase": phase,
+            }
+            self._fh.write(json.dumps(rec, sort_keys=True) + "\n")
 
     def _run(self) -> None:
-        assert self.path is not None
+        ser = self.ppk.ser
+        window: list[float] = []
+        window_phase = self._phase
+        window_start = time.time()
         while not self._stop.is_set():
             try:
-                with self._io_lock:
-                    raw = self.ppk.get_data()
-                    if not raw:
-                        samples = []
-                    else:
-                        samples, _digital = self.ppk.get_samples(raw)
-                if not samples:
-                    time.sleep(0.05)
-                    continue
-                avg = sum(samples) / len(samples)
-                with self._meta_lock:
-                    phase = self.phase
-                    self.last_avg_uA = avg
-                    self.sample_count += len(samples)
-                rec = {
-                    "ts": time.time(),
-                    "iso": _utc_now(),
-                    "uA": round(avg, 3),
-                    "n": len(samples),
-                    "min_uA": round(min(samples), 3),
-                    "max_uA": round(max(samples), 3),
-                    "phase": phase,
-                }
-                with open(self.path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(rec, sort_keys=True) + "\n")
+                raw = ser.read(ser.in_waiting or 1)
+                now = time.time()
+                with self._lock:
+                    phase = self._phase
+                if window and (phase != window_phase or now - window_start >= LOG_WINDOW_S):
+                    self._emit(window_phase, window, now)
+                    window = []
+                if not window:
+                    window_phase = phase
+                    window_start = now
+                if raw:
+                    samples, _digital = self.ppk.get_samples(raw)
+                    if samples:
+                        window.extend(samples)
             except Exception as e:
-                with open(self.path, "a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "ts": time.time(),
-                                "iso": _utc_now(),
-                                "error": str(e),
-                                "phase": self.phase,
-                            },
-                            sort_keys=True,
-                        )
-                        + "\n"
-                    )
+                if self._fh:
+                    self._fh.write(json.dumps({"ts": time.time(), "error": str(e), "phase": window_phase}) + "\n")
                 time.sleep(0.2)
-            time.sleep(0.05)
+        if window:
+            self._emit(window_phase, window, time.time())
 
 
 class PpkSession:
@@ -212,23 +337,36 @@ class PpkSession:
         self.port = port
         self.voltage_mv = voltage_mv
         self.ppk = PPK2_API(port, timeout=1, write_timeout=1)
-        self._io = threading.Lock()
-        self.logger: Optional[CurrentLogger] = None
+        self.ppk.ser.timeout = 0.2  # bounds how long the sampler takes to stop
+        self.serial_number = self._serial_number(port)
+        self._wr = threading.Lock()  # command writes; the sampler only reads
+        self.modifiers_source = ""
+        self.sampler: Optional[CurrentSampler] = None
 
-    def close(self) -> None:
-        if self.logger:
-            self.logger.stop()
-            self.logger = None
-        with self._io:
+    def close(self, keep_power: bool = False) -> None:
+        """keep_power=True leaves DTR up on close so the PPK2 does not reset
+        and the DUT stays powered after this process exits."""
+        if self.sampler:
+            self.sampler.stop()
+        with self._wr:
             try:
                 self.ppk._write_serial((PPK2_Command.AVERAGE_STOP,))
                 time.sleep(0.05)
             except Exception:
                 pass
+            _set_hupcl(self.ppk.ser, hangup=not keep_power)
             try:
                 self.ppk.ser.close()
             except Exception:
                 pass
+
+    def summary(self) -> Optional[dict[str, Any]]:
+        if not self.sampler:
+            return None
+        out = self.sampler.summary()
+        out["modifiers"] = self.modifiers_source or "missing"
+        out["ppk_serial"] = self.serial_number
+        return out
 
     def _drain(self, seconds: float = 0.8) -> None:
         deadline = time.time() + seconds
@@ -243,105 +381,243 @@ class PpkSession:
 
     def _soft_stop(self) -> None:
         """Stop measuring / DUT without USB RESET (RESET re-enumerates the ACM)."""
-        with self._io:
+        try:
+            self.ppk._write_serial((PPK2_Command.AVERAGE_STOP,))
+            time.sleep(0.1)
+            self.ppk._write_serial((PPK2_Command.DEVICE_RUNNING_SET, PPK2_Command.NO_OP))
+            time.sleep(0.1)
+            self._drain(0.6)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _serial_number(port: str) -> str:
+        try:
+            import serial.tools.list_ports
+
+            for p in serial.tools.list_ports.comports():
+                if p.device == port and p.serial_number:
+                    return p.serial_number
+        except Exception:
+            pass
+        return "unknown"
+
+    def _load_modifiers(self) -> str:
+        """Returns 'device', 'cache' or '' (not loaded)."""
+        cache = MODIFIER_CACHE_DIR / f"modifiers-{self.serial_number}.txt"
+        for _ in range(2):
             try:
-                self.ppk._write_serial((PPK2_Command.AVERAGE_STOP,))
-                time.sleep(0.1)
-                self.ppk._write_serial((PPK2_Command.DEVICE_RUNNING_SET, PPK2_Command.NO_OP))
-                time.sleep(0.1)
-                self._drain(0.6)
+                self.ppk._write_serial((PPK2_Command.GET_META_DATA,))
+                time.sleep(0.25)
+                chunks: list[bytes] = []
+                for __ in range(10):
+                    b = self.ppk.ser.read(self.ppk.ser.in_waiting or 1)
+                    if b:
+                        chunks.append(b)
+                    time.sleep(0.08)
+                text = b"".join(chunks).decode("utf-8", errors="ignore")
+                if "END" in text:
+                    self.ppk._parse_metadata(text)
+                    if self.serial_number != "unknown":
+                        try:
+                            cache.parent.mkdir(parents=True, exist_ok=True)
+                            cache.write_text(text, encoding="utf-8")
+                        except OSError:
+                            pass
+                    return "device"
+            except Exception:
+                time.sleep(0.2)
+        if cache.is_file():
+            try:
+                self.ppk._parse_metadata(cache.read_text(encoding="utf-8"))
+                return "cache"
             except Exception:
                 pass
+        return ""
 
-    def _load_modifiers(self) -> bool:
-        with self._io:
-            for _ in range(5):
-                try:
-                    self.ppk._write_serial((PPK2_Command.GET_META_DATA,))
-                    time.sleep(0.25)
-                    chunks: list[bytes] = []
-                    for __ in range(10):
-                        b = self.ppk.ser.read(self.ppk.ser.in_waiting or 1)
-                        if b:
-                            chunks.append(b)
-                        time.sleep(0.08)
-                    text = b"".join(chunks).decode("utf-8", errors="ignore")
-                    if "END" in text:
-                        self.ppk._parse_metadata(text)
-                        return True
-                except Exception:
-                    time.sleep(0.2)
-        return False
+    def arm(self, current_log: Optional[Path] = None, dut_on: bool = True) -> Optional[float]:
+        """Source-meter mode, set voltage, start measuring + sampler.
 
-    def arm(self, current_log: Optional[Path] = None) -> float:
-        """Source-meter mode, set voltage, DUT ON, start measuring. Returns avg uA."""
+        dut_on=False leaves the DUT unpowered (callers that power-cycle next
+        do not need an extra boot). Returns the spot average in uA when on.
+        """
         self._soft_stop()
-        if not self._load_modifiers():
+        self.modifiers_source = self._load_modifiers()
+        if not self.modifiers_source:
             print("WARNING: PPK2 modifiers not loaded; current values may be off", flush=True)
-        if self.voltage_mv > 3600:
+        if self.voltage_mv > RATED_MAX_MV:
             print(
                 f"WARNING: PS-CB-NA rated max ~3.6 V; using {self.voltage_mv} mV",
                 flush=True,
             )
-        with self._io:
+        with self._wr:
             self.ppk.set_source_voltage(self.voltage_mv)
             time.sleep(0.2)
             self.ppk.use_source_meter()
             time.sleep(0.3)
-            self.ppk.toggle_DUT_power("ON")
-            time.sleep(0.2)
+            if dut_on:
+                self.ppk.toggle_DUT_power("ON")
+                time.sleep(0.2)
             self.ppk.start_measuring()
-            time.sleep(0.4)
 
-        self.logger = CurrentLogger(self.ppk, current_log, phase="armed", io_lock=self._io)
-        self.logger.start()
-
-        avg = self._spot_avg()
+        self.sampler = CurrentSampler(
+            self.ppk, current_log, self.voltage_mv, phase="armed_on" if dut_on else "armed_off"
+        )
+        self.sampler.start()
+        time.sleep(0.5)
+        avg = self.sampler.recent_avg(0.4) if dut_on else None
         print(
-            f"PPK2 armed: source-meter @ {self.voltage_mv} mV on {self.port}"
+            f"PPK2 armed: source-meter @ {self.voltage_mv} mV on {self.port}, DUT {'ON' if dut_on else 'OFF'}"
             + (f" avg_uA={avg:.1f}" if avg is not None else ""),
             flush=True,
         )
-        return avg if avg is not None else float("nan")
+        return avg
 
-    def _spot_avg(self) -> Optional[float]:
-        for _ in range(8):
-            with self._io:
-                raw = self.ppk.get_data()
-                samples = []
-                if raw:
-                    samples, _ = self.ppk.get_samples(raw)
-            if samples:
-                return sum(samples) / len(samples)
-            time.sleep(0.1)
-        return None
+    def set_phase(self, phase: str) -> None:
+        if self.sampler:
+            self.sampler.set_phase(phase)
 
-    def dut_on(self) -> None:
-        with self._io:
+    def dut_on(self, phase: str = "dut_on") -> None:
+        with self._wr:
             self.ppk.toggle_DUT_power("ON")
-        if self.logger:
-            self.logger.set_phase("dut_on")
+        self.set_phase(phase)
         print(f"DUT ON @ {self.voltage_mv} mV", flush=True)
 
-    def dut_off(self) -> None:
-        with self._io:
+    def dut_off(self, phase: str = "dut_off") -> None:
+        with self._wr:
             self.ppk.toggle_DUT_power("OFF")
-        if self.logger:
-            self.logger.set_phase("dut_off")
+        self.set_phase(phase)
         print("DUT OFF", flush=True)
 
-    def cycle(self, off_seconds: float = DEFAULT_OFF_S, phase: str = "cycle") -> None:
-        if self.logger:
-            self.logger.set_phase(f"{phase}_off")
-        with self._io:
+    def cycle(self, off_seconds: float = DEFAULT_OFF_S, phase: str = "cycle") -> float:
+        """DUT off, wait, on. Returns the host time of power-on."""
+        self.set_phase(f"{phase}_off")
+        with self._wr:
             self.ppk.toggle_DUT_power("OFF")
         print(f"DUT OFF ({off_seconds}s)...", flush=True)
         time.sleep(off_seconds)
-        with self._io:
+        with self._wr:
             self.ppk.toggle_DUT_power("ON")
-        if self.logger:
-            self.logger.set_phase(f"{phase}_on")
+        t_on = time.time()
+        self.set_phase(f"{phase}_on")
         print(f"DUT ON @ {self.voltage_mv} mV", flush=True)
+        return t_on
+
+
+class ConsoleHold:
+    """Holds the console UART open with RTS at a fixed BOOT0 level.
+
+    Opening the port with RTS preset avoids a level glitch on open. A reader
+    thread timestamps every console line (relative to mark_power_on()) and
+    optionally mirrors them to a log file.
+    """
+
+    def __init__(self, uart: str, rts: bool, log_path: Optional[Path] = None):
+        self.uart = uart
+        self.rts = rts
+        s = serial.Serial()
+        s.port = uart
+        s.baudrate = CONSOLE_BAUD
+        s.timeout = 0.1
+        s.rts = rts
+        s.dtr = False
+        s.open()
+        self.ser = s
+        self._lock = threading.Lock()
+        self._lines: list[tuple[float, str]] = []
+        self._partial = b""
+        self._t0 = time.time()
+        self._stop = threading.Event()
+        self._fh = open(log_path, "a", encoding="utf-8") if log_path else None
+        self._thread = threading.Thread(target=self._run, name="console", daemon=True)
+        self._thread.start()
+
+    def mark_power_on(self, t_on: Optional[float] = None) -> None:
+        with self._lock:
+            self._t0 = t_on or time.time()
+            self._lines = []
+        self._log(f"---- power on ({_utc_now()}) ----")
+
+    def _log(self, text: str) -> None:
+        if self._fh:
+            self._fh.write(text + "\n")
+            self._fh.flush()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                chunk = self.ser.read(256)
+            except Exception:
+                break
+            if not chunk:
+                continue
+            now = time.time()
+            data = self._partial + chunk
+            parts = data.split(b"\n")
+            self._partial = parts.pop()
+            with self._lock:
+                for p in parts:
+                    line = p.decode("latin1", errors="replace").rstrip("\r")
+                    t = now - self._t0
+                    self._lines.append((t, line))
+                    self._log(f"{t:8.3f}  {line}")
+
+    def lines_since(self, idx: int) -> list[tuple[float, str]]:
+        with self._lock:
+            return self._lines[idx:]
+
+    def line_count(self) -> int:
+        with self._lock:
+            return len(self._lines)
+
+    def wait_for(self, markers: tuple[str, ...], timeout: float, start_idx: int = 0) -> Optional[tuple[float, str]]:
+        deadline = time.time() + timeout
+        idx = start_idx
+        while time.time() < deadline:
+            for t, line in self.lines_since(idx):
+                idx += 1
+                if any(m in line for m in markers):
+                    return t, line
+            time.sleep(0.05)
+        return None
+
+    def command(self, cmd: str, timeout: float = 2.0) -> tuple[bool, list[str]]:
+        """Send an AT line; collect lines until OK/ERROR or timeout."""
+        idx = self.line_count()
+        self._log(f">>> {cmd}")
+        self.ser.write(cmd.encode("ascii") + b"\r\n")
+        self.ser.flush()
+        deadline = time.time() + timeout
+        got: list[str] = []
+        while time.time() < deadline:
+            for _t, line in self.lines_since(idx):
+                idx += 1
+                got.append(line)
+                if line.strip() == "OK":
+                    return True, got
+                if "ERROR" in line:
+                    return False, got
+            time.sleep(0.05)
+        return False, got
+
+    def transcript(self, max_chars: int = 3000) -> str:
+        with self._lock:
+            text = "\n".join(f"{t:7.2f} {line}" for t, line in self._lines)
+        return text[-max_chars:]
+
+    def close(self, keep_rts: bool = False) -> None:
+        """keep_rts=True leaves RTS at its level after close (e.g. Flash, so a
+        later reset of a still-powered DUT boots the app, not ROM ISP)."""
+        self._stop.set()
+        self._thread.join(timeout=1.0)
+        _set_hupcl(self.ser, hangup=not keep_rts)
+        try:
+            self.ser.close()
+        except Exception:
+            pass
+        if self._fh:
+            self._fh.close()
+            self._fh = None
 
 
 def _hold_rts(uart: str, rts: bool, baud: int = ISP_BAUD) -> serial.Serial:
@@ -359,8 +635,6 @@ def isp_sync(uart: str, isp_rts: bool, ppk: PpkSession, off_seconds: float) -> b
     from stm32loader.bootloader import Stm32Bootloader
     from stm32loader.uart import SerialConnection
 
-    if ppk.logger:
-        ppk.logger.set_phase("isp_entry")
     print(f"ISP entry: RTS={isp_rts}", flush=True)
     conn = SerialConnection(uart, ISP_BAUD, "E")
     conn.connect()
@@ -390,66 +664,118 @@ def isp_sync(uart: str, isp_rts: bool, ppk: PpkSession, off_seconds: float) -> b
 def do_flash(uart: str, hex_path: Path, isp_rts: bool, ppk: PpkSession, off_seconds: float) -> dict[str, Any]:
     from pscb_app_isp import flash_image, load_hex
 
+    # load_hex/flash_image raise SystemExit on refusal/failure -- surface as errors
+    try:
+        data, addr = load_hex(hex_path)
+    except SystemExit as e:
+        raise RuntimeError(f"load_hex: {e}") from None
+
     # Fresh ISP entry for the write
     hold = _hold_rts(uart, isp_rts, ISP_BAUD)
     try:
-        if ppk.logger:
-            ppk.logger.set_phase("flash_isp_cycle")
         ppk.cycle(off_seconds, phase="flash_isp")
         time.sleep(0.8)
         hold.rts = isp_rts
     finally:
         hold.close()
 
-    data, addr = load_hex(hex_path)
     print(f"Flash {len(data)} bytes @ 0x{addr:08X}", flush=True)
-    if ppk.logger:
-        ppk.logger.set_phase("flash_write")
+    ppk.set_phase("flash_write")
+    t0 = time.time()
     # soft_isp=True: no zenity; board already in ROM ISP from power-cycle
-    flash_image(uart, ISP_BAUD, data, addr, soft_isp=True)
-    return {"bytes": len(data), "address": f"0x{addr:08X}"}
+    try:
+        flash_image(uart, ISP_BAUD, data, addr, soft_isp=True)
+    except SystemExit as e:
+        raise RuntimeError(f"flash_image: {e}") from None
+    return {"bytes": len(data), "address": f"0x{addr:08X}", "write_s": round(time.time() - t0, 1)}
 
 
-def do_boot(
-    uart: str,
-    flash_rts: bool,
+def boot_and_probe(
+    console: ConsoleHold,
     ppk: PpkSession,
     off_seconds: float,
-    settle_s: float = 8.0,
+    boot_timeout: float,
+    probe_at: bool = True,
 ) -> dict[str, Any]:
-    """Power-cycle into Flash/normal mode and capture console banner + AT."""
-    if ppk.logger:
-        ppk.logger.set_phase("boot")
-    hold = _hold_rts(uart, flash_rts, CONSOLE_BAUD)
-    try:
-        ppk.cycle(off_seconds, phase="boot")
-        hold.rts = flash_rts
-        buf = bytearray()
-        deadline = time.time() + settle_s
-        while time.time() < deadline:
-            chunk = hold.read(256)
-            if chunk:
-                buf.extend(chunk)
-        banner = bytes(buf)
-        # Prefer probing after openfw heartbeat shows up; still send AT either way
-        hold.reset_input_buffer()
-        hold.write(b"AT\r\n")
-        hold.flush()
-        time.sleep(0.8)
-        at_resp = hold.read(256)
-        text = banner.decode("latin1", errors="replace")
-        at_text = at_resp.decode("latin1", errors="replace")
-        ok = ("OK" in at_text) or ("openfw" in text) or ("Password" in text)
-        print(f"boot banner ({len(banner)}B): {banner[:200]!r}", flush=True)
-        print(f"AT -> {at_resp!r}", flush=True)
-        return {
-            "ok": ok,
-            "banner_preview": text[:400],
-            "at_response": at_text.strip()[:200],
-            "openfw_seen": "openfw" in text,
-        }
-    finally:
-        hold.close()
+    """Power-cycle with the console held at the Flash level, wait for the app
+    banner (returns as soon as it appears), then probe AT.
+
+    ok requires AT -> OK when probe_at, else just the app banner.
+    """
+    t_on = ppk.cycle(off_seconds, phase="boot")
+    console.mark_power_on(t_on)
+    bl = console.wait_for((BOOTLOADER_MARKER,), timeout=min(5.0, boot_timeout))
+    app = console.wait_for(APP_MARKERS, timeout=max(0.0, boot_timeout - (time.time() - t_on)))
+    detail: dict[str, Any] = {
+        "bootloader_seen_s": round(bl[0], 2) if bl else None,
+        "app_banner_s": round(app[0], 2) if app else None,
+    }
+    if app:
+        ppk.set_phase("app")
+        # let the banner finish before talking to the console
+        time.sleep(1.5)
+
+    at_ok = False
+    at_lines: list[str] = []
+    if probe_at:
+        for _ in range(3):
+            at_ok, at_lines = console.command("AT", timeout=2.0)
+            if at_ok:
+                break
+        detail["at_ok"] = at_ok
+        detail["at_response"] = "\n".join(at_lines)[:200]
+
+    text = console.transcript()
+    detail["openfw_seen"] = "openfw" in text
+    for line in text.splitlines():
+        if "Image Version:" in line:
+            detail["image_version"] = line.split("Image Version:", 1)[1].strip()
+            break
+    detail["console_tail"] = text[-1500:]
+    detail["ok"] = at_ok if probe_at else bool(app)
+    print(
+        f"boot: bootloader@{detail['bootloader_seen_s']}s app@{detail['app_banner_s']}s"
+        + (f" AT ok={at_ok} {at_lines!r}" if probe_at else ""),
+        flush=True,
+    )
+    return detail
+
+
+def _open_console(args: argparse.Namespace, result: RunResult, rts: bool) -> ConsoleHold:
+    log = Path(args.console_log) if args.console_log else None
+    result.console_log = str(log) if log else None
+    return ConsoleHold(args.uart, rts, log)
+
+
+def _boot_rts(args: argparse.Namespace) -> bool:
+    """RTS level for the requested boot mode (Flash = inverse of ISP)."""
+    return args.isp_rts if args.boot_mode == "isp" else not args.isp_rts
+
+
+def _finish(
+    args: argparse.Namespace,
+    result: RunResult,
+    session: PpkSession,
+    console: Optional[ConsoleHold],
+) -> None:
+    keep = bool(args.keep_power) and result.ok and result.command != "off"
+    if console:
+        console.close(keep_rts=keep)
+    result.current_summary = session.summary()
+    session.close(keep_power=keep)
+    if keep:
+        print(
+            f"DUT left powered at {args.voltage_mv} mV (PPK2 not reset); "
+            "run the 'off' command to cut power",
+            flush=True,
+        )
+
+
+def _hold(args: argparse.Namespace, session: PpkSession) -> None:
+    if args.hold_seconds > 0:
+        print(f"Holding DUT ON for {args.hold_seconds}s (PPK2 + console held open)...", flush=True)
+        session.set_phase("hold")
+        time.sleep(args.hold_seconds)
 
 
 def cmd_flash_run(args: argparse.Namespace, result: RunResult) -> int:
@@ -462,14 +788,14 @@ def cmd_flash_run(args: argparse.Namespace, result: RunResult) -> int:
     current_log = Path(args.current_log) if args.current_log else None
     session = PpkSession(result.ppk_port, args.voltage_mv)
     result.current_log = str(current_log) if current_log else None
+    console: Optional[ConsoleHold] = None
 
     try:
-        # --- arm ---
+        # --- arm (DUT stays off; the ISP cycle powers it) ---
         st = StepResult("arm", False, started_at=_utc_now())
         try:
-            avg = session.arm(current_log)
+            session.arm(current_log, dut_on=False)
             st.ok = True
-            st.detail = {"avg_uA": None if avg != avg else round(avg, 2)}
         except Exception as e:
             st.error = str(e)
         st.finished_at = _utc_now()
@@ -499,9 +825,8 @@ def cmd_flash_run(args: argparse.Namespace, result: RunResult) -> int:
         # --- flash ---
         st = StepResult("flash", False, started_at=_utc_now())
         try:
-            detail = do_flash(args.uart, hex_path, isp_rts, session, args.off_seconds)
+            st.detail = do_flash(args.uart, hex_path, isp_rts, session, args.off_seconds)
             st.ok = True
-            st.detail = detail
         except Exception as e:
             st.error = str(e)
         st.finished_at = _utc_now()
@@ -509,15 +834,15 @@ def cmd_flash_run(args: argparse.Namespace, result: RunResult) -> int:
         if not st.ok:
             return 1
 
-        # --- boot + AT ---
-        flash_rts = not isp_rts
+        # --- boot + AT (console held at the Flash level from here on) ---
         st = StepResult("boot", False, started_at=_utc_now())
         try:
-            boot = do_boot(args.uart, flash_rts, session, args.off_seconds, args.settle_seconds)
+            console = _open_console(args, result, rts=not isp_rts)
+            boot = boot_and_probe(console, session, args.off_seconds, args.settle_seconds)
             st.ok = bool(boot.get("ok"))
             st.detail = boot
             if not st.ok:
-                st.error = "AT probe / openfw banner not seen"
+                st.error = "no AT -> OK after boot" if boot.get("app_banner_s") else "app banner not seen"
         except Exception as e:
             st.error = str(e)
         st.finished_at = _utc_now()
@@ -525,114 +850,34 @@ def cmd_flash_run(args: argparse.Namespace, result: RunResult) -> int:
         if not st.ok:
             return 1
 
-        if args.hold_seconds > 0:
-            print(f"Holding DUT ON for {args.hold_seconds}s (PPK2 port open)...", flush=True)
-            if session.logger:
-                session.logger.set_phase("hold")
-            time.sleep(args.hold_seconds)
-
+        _hold(args, session)
         if args.power_off:
             session.dut_off()
 
         result.ok = True
         return 0
     finally:
-        session.close()
-
-
-def cmd_cycle(args: argparse.Namespace, result: RunResult) -> int:
-    current_log = Path(args.current_log) if args.current_log else None
-    session = PpkSession(result.ppk_port, args.voltage_mv)
-    result.current_log = str(current_log) if current_log else None
-    try:
-        st = StepResult("arm", False, started_at=_utc_now())
-        avg = session.arm(current_log)
-        st.ok = True
-        st.detail = {"avg_uA": None if avg != avg else round(avg, 2)}
-        st.finished_at = _utc_now()
-        result.add(st)
-
-        st = StepResult("cycle", False, started_at=_utc_now())
-        session.cycle(args.off_seconds, phase="cycle")
-        time.sleep(args.settle_seconds)
-        avg2 = session._spot_avg()
-        st.ok = True
-        st.detail = {"avg_uA_after": None if avg2 is None else round(avg2, 2)}
-        st.finished_at = _utc_now()
-        result.add(st)
-
-        if args.hold_seconds > 0:
-            print(f"Holding {args.hold_seconds}s...", flush=True)
-            time.sleep(args.hold_seconds)
-        if args.power_off:
-            session.dut_off()
-        result.ok = True
-        return 0
-    except Exception as e:
-        result.ok = False
-        result.error = str(e)
-        return 1
-    finally:
-        session.close()
-
-
-def cmd_monitor(args: argparse.Namespace, result: RunResult) -> int:
-    if not args.current_log:
-        result.error = "--current-log is required for monitor"
-        result.ok = False
-        return 2
-    current_log = Path(args.current_log)
-    session = PpkSession(result.ppk_port, args.voltage_mv)
-    result.current_log = str(current_log)
-    try:
-        st = StepResult("arm", False, started_at=_utc_now())
-        avg = session.arm(current_log)
-        st.ok = True
-        st.detail = {"avg_uA": None if avg != avg else round(avg, 2)}
-        st.finished_at = _utc_now()
-        result.add(st)
-
-        seconds = args.seconds
-        print(f"Monitoring current for {seconds}s -> {current_log}", flush=True)
-        if session.logger:
-            session.logger.set_phase("monitor")
-        time.sleep(seconds)
-        st = StepResult("monitor", True, started_at=_utc_now(), finished_at=_utc_now())
-        st.detail = {
-            "seconds": seconds,
-            "samples": session.logger.sample_count if session.logger else 0,
-            "last_avg_uA": session.logger.last_avg_uA if session.logger else None,
-        }
-        result.add(st)
-        if args.power_off:
-            session.dut_off()
-        result.ok = True
-        return 0
-    except Exception as e:
-        result.ok = False
-        result.error = str(e)
-        return 1
-    finally:
-        session.close()
+        _finish(args, result, session, console)
 
 
 def cmd_boot(args: argparse.Namespace, result: RunResult) -> int:
     current_log = Path(args.current_log) if args.current_log else None
     session = PpkSession(result.ppk_port, args.voltage_mv)
     result.current_log = str(current_log) if current_log else None
+    console: Optional[ConsoleHold] = None
     try:
-        session.arm(current_log)
-        flash_rts = not args.isp_rts
+        console = _open_console(args, result, rts=not args.isp_rts)
+        session.arm(current_log, dut_on=False)
         st = StepResult("boot", False, started_at=_utc_now())
-        boot = do_boot(args.uart, flash_rts, session, args.off_seconds, args.settle_seconds)
+        boot = boot_and_probe(console, session, args.off_seconds, args.settle_seconds)
         st.ok = bool(boot.get("ok"))
         st.detail = boot
         if not st.ok:
-            st.error = "AT probe / openfw banner not seen"
+            st.error = "no AT -> OK after boot" if boot.get("app_banner_s") else "app banner not seen"
         st.finished_at = _utc_now()
         result.add(st)
-        if args.hold_seconds > 0:
-            time.sleep(args.hold_seconds)
+        if st.ok:
+            _hold(args, session)
         if args.power_off:
             session.dut_off()
         result.ok = st.ok
@@ -642,26 +887,80 @@ def cmd_boot(args: argparse.Namespace, result: RunResult) -> int:
         result.error = str(e)
         return 1
     finally:
-        session.close()
+        _finish(args, result, session, console)
 
 
-def cmd_on_off(args: argparse.Namespace, result: RunResult, want_on: bool) -> int:
+def cmd_cycle(args: argparse.Namespace, result: RunResult) -> int:
+    """Power-cycle. With the console held (default) waits for the app banner."""
     current_log = Path(args.current_log) if args.current_log else None
     session = PpkSession(result.ppk_port, args.voltage_mv)
     result.current_log = str(current_log) if current_log else None
+    console: Optional[ConsoleHold] = None
     try:
-        session.arm(current_log)
-        st = StepResult("on" if want_on else "off", False, started_at=_utc_now())
-        if want_on:
-            session.dut_on()
+        if not args.no_uart:
+            console = _open_console(args, result, rts=_boot_rts(args))
+        session.arm(current_log, dut_on=False)
+
+        st = StepResult("cycle", False, started_at=_utc_now())
+        if console and args.boot_mode == "flash":
+            st.detail = boot_and_probe(console, session, args.off_seconds, args.settle_seconds, probe_at=False)
+            st.ok = bool(st.detail.get("ok"))
+            if not st.ok:
+                st.error = "app banner not seen"
         else:
-            session.dut_off()
-        st.ok = True
+            session.cycle(args.off_seconds, phase="cycle")
+            time.sleep(1.0)
+            st.ok = True
+            st.detail = {"boot_mode": "isp" if console else "unheld (RTS released = ISP level)"}
+        avg = session.sampler.recent_avg(0.5) if session.sampler else None
+        st.detail["avg_uA_after"] = None if avg is None else round(avg, 2)
         st.finished_at = _utc_now()
         result.add(st)
-        if want_on and args.hold_seconds > 0:
-            print(f"Holding DUT ON for {args.hold_seconds}s...", flush=True)
-            time.sleep(args.hold_seconds)
+
+        if st.ok:
+            _hold(args, session)
+        if args.power_off:
+            session.dut_off()
+        result.ok = st.ok
+        return 0 if st.ok else 1
+    except Exception as e:
+        result.ok = False
+        result.error = str(e)
+        return 1
+    finally:
+        _finish(args, result, session, console)
+
+
+def cmd_monitor(args: argparse.Namespace, result: RunResult) -> int:
+    """Power on (cold boot) and record current + console for --seconds."""
+    current_log = Path(args.current_log)
+    session = PpkSession(result.ppk_port, args.voltage_mv)
+    result.current_log = str(current_log)
+    console: Optional[ConsoleHold] = None
+    try:
+        if not args.no_uart:
+            console = _open_console(args, result, rts=_boot_rts(args))
+        session.arm(current_log, dut_on=False)
+        t_on = session.cycle(args.off_seconds, phase="boot")
+        if console:
+            console.mark_power_on(t_on)
+
+        seconds = args.seconds
+        print(f"Monitoring current for {seconds}s -> {current_log}", flush=True)
+        app_s = None
+        if console and args.boot_mode == "flash":
+            app = console.wait_for(APP_MARKERS, timeout=min(seconds, args.settle_seconds))
+            if app:
+                app_s = round(app[0], 2)
+                session.set_phase("app")
+        remaining = seconds - (time.time() - t_on)
+        if remaining > 0:
+            time.sleep(remaining)
+        st = StepResult("monitor", True, started_at=_utc_now(), finished_at=_utc_now())
+        st.detail = {"seconds": seconds, "app_banner_s": app_s}
+        result.add(st)
+        if args.power_off:
+            session.dut_off()
         result.ok = True
         return 0
     except Exception as e:
@@ -669,7 +968,37 @@ def cmd_on_off(args: argparse.Namespace, result: RunResult, want_on: bool) -> in
         result.error = str(e)
         return 1
     finally:
-        session.close()
+        _finish(args, result, session, console)
+
+
+def cmd_on_off(args: argparse.Namespace, result: RunResult, want_on: bool) -> int:
+    current_log = Path(args.current_log) if args.current_log else None
+    session = PpkSession(result.ppk_port, args.voltage_mv)
+    result.current_log = str(current_log) if current_log else None
+    console: Optional[ConsoleHold] = None
+    try:
+        if want_on and not args.no_uart:
+            console = _open_console(args, result, rts=_boot_rts(args))
+        session.arm(current_log, dut_on=False)
+        st = StepResult("on" if want_on else "off", True, started_at=_utc_now())
+        if not want_on:
+            session.dut_off()
+        else:
+            t_on = time.time()
+            session.dut_on()
+            if console:
+                console.mark_power_on(t_on)
+            _hold(args, session)
+        st.finished_at = _utc_now()
+        result.add(st)
+        result.ok = True
+        return 0
+    except Exception as e:
+        result.ok = False
+        result.error = str(e)
+        return 1
+    finally:
+        _finish(args, result, session, console)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -684,13 +1013,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--ppk", default="auto", help="PPK2 port or 'auto' (default)")
     p.add_argument("--uart", default=DEFAULT_UART, help=f"FTDI UART (default {DEFAULT_UART})")
-    p.add_argument("--voltage-mv", type=int, default=DEFAULT_MV, help="Source voltage mV (default 3700)")
+    p.add_argument("--voltage-mv", type=int, default=DEFAULT_MV, help=f"Source voltage mV (default {DEFAULT_MV})")
     p.add_argument("--off-seconds", type=float, default=DEFAULT_OFF_S, help="DUT off time during cycle")
-    p.add_argument("--settle-seconds", type=float, default=8.0, help="Post-boot listen window")
-    p.add_argument("--hold-seconds", type=float, default=0.0, help="Keep DUT ON / port open after success")
-    p.add_argument("--power-off", action="store_true", help="DUT OFF before exit (default: leave last state until port closes)")
+    p.add_argument(
+        "--settle-seconds",
+        type=float,
+        default=DEFAULT_BOOT_TIMEOUT_S,
+        help=f"Max wait for the app banner after power-on; returns as soon as it appears "
+        f"(default {DEFAULT_BOOT_TIMEOUT_S:g}; the bootloader alone takes ~27 s)",
+    )
+    p.add_argument("--hold-seconds", type=float, default=0.0, help="Keep DUT ON (PPK2 + console held) after success")
+    p.add_argument("--power-off", action="store_true", help="DUT OFF before exit (power drops at exit anyway)")
+    p.add_argument(
+        "--keep-power",
+        action="store_true",
+        help="On success leave the DUT powered after exit (PPK2 not reset) with RTS kept "
+        "at the Flash level; cut it later with the 'off' command",
+    )
     p.add_argument("--hex", type=str, default="", help="App Intel HEX for flash / flash-run")
     p.add_argument("--current-log", type=str, default="", help="JSONL path for current samples")
+    p.add_argument("--console-log", type=str, default="", help="Timestamped console transcript path")
     p.add_argument("--result", type=str, default="", help="Write full result JSON here")
     p.add_argument(
         "--isp-rts",
@@ -704,7 +1046,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="On ISP sync failure, try inverted RTS (default: on)",
     )
-    p.add_argument("--seconds", type=float, default=30.0, help="monitor duration")
+    p.add_argument(
+        "--boot-mode",
+        choices=["flash", "isp"],
+        default="flash",
+        help="cycle/on/monitor: BOOT0 level held on the console RTS while powered (default flash = run the app)",
+    )
+    p.add_argument(
+        "--no-uart",
+        action="store_true",
+        help="cycle/on/monitor: do not open the console. RTS is then released = ISP level, "
+        "so the board boots the ROM bootloader, not the app",
+    )
+    p.add_argument("--seconds", type=float, default=30.0, help="monitor duration (from power-on)")
     return p
 
 
@@ -719,6 +1073,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("--hex is required for flash / flash-run", file=sys.stderr)
         return 2
 
+    if args.command == "on" and args.hold_seconds <= 0 and not args.keep_power:
+        print(
+            "'on' needs --hold-seconds N or --keep-power: otherwise DUT power drops "
+            "as soon as this process closes the PPK2 port",
+            file=sys.stderr,
+        )
+        return 2
+
     if not Path(args.uart).exists() and not str(args.uart).upper().startswith("COM"):
         print(f"UART not found: {args.uart}", file=sys.stderr)
         return 3
@@ -731,12 +1093,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # Default logs under dragino/logs/
     logs_dir = _DRAGINO_ROOT / "logs"
-    if not args.current_log and args.command in ("flash-run", "flash", "monitor", "cycle", "boot"):
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not args.current_log and args.command in ("flash-run", "flash", "monitor", "cycle", "boot", "on"):
         args.current_log = str(logs_dir / f"ppk2-current-{stamp}.jsonl")
-    if not args.result and args.command in ("flash-run", "flash", "boot"):
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not args.result and args.command in ("flash-run", "flash", "boot", "monitor"):
         args.result = str(logs_dir / f"ppk2-result-{stamp}.json")
+    if not args.console_log and args.command in ("flash-run", "flash", "monitor", "cycle", "boot", "on"):
+        args.console_log = str(logs_dir / f"console-{stamp}.log")
 
     result = RunResult(
         ok=False,
@@ -747,8 +1110,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         uart=args.uart,
     )
 
-    # 'flash' is flash-run without requiring AT ok? Keep same pipeline but
-    # still boot-verify — agents usually want flash-run. Alias flash -> flash-run.
+    # 'flash' is an alias of flash-run (agents always want the boot verify)
     cmd = args.command
     if cmd == "flash":
         cmd = "flash-run"
@@ -785,6 +1147,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Wrote result -> {result_path}", flush=True)
     if result.current_log:
         print(f"Current log -> {result.current_log}", flush=True)
+    if result.console_log:
+        print(f"Console log -> {result.console_log}", flush=True)
     return rc
 
 
