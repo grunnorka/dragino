@@ -1,5 +1,12 @@
 ﻿"""Control Nordic PPK2 DUT power for Dragino PS-CB-NA restarts.
 
+Prefer the fuller agent CLI for flash / current logging / kept-open sessions:
+  shared/pscb_ppk2_cli.py  (flash-run | cycle | monitor | ...)
+
+NOTE: closing the PPK2 serial port after DUT ON often drops source output
+(LED back to green). This thin helper still closes on exit — use
+pscb_ppk2_cli.py --hold-seconds when power must stay up.
+
 PPK2 USB: VID_1915 / PID_C00A
   COM10 = PPK2 control (this script)  — MI_01
   COM9  = PPK2 secondary CDC          — MI_03 (unused here)
