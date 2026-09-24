@@ -241,6 +241,8 @@ class CurrentSampler:
         self._recent: list[tuple[float, float, int]] = []  # (ts, sum_uA, n) per window
         self._fh = None
         self.t_start = 0.0
+        self._raw: Optional[list[float]] = None  # raw 100 kS/s capture buffer
+        self._raw_left = 0
         if path:
             path.parent.mkdir(parents=True, exist_ok=True)
             self._fh = open(path, "w", encoding="utf-8")
@@ -262,6 +264,21 @@ class CurrentSampler:
         if self._fh:
             self._fh.close()
             self._fh = None
+
+    def capture_raw(self, seconds: float) -> list[float]:
+        """Block and return `seconds` of raw samples (uA) at the full rate."""
+        with self._lock:
+            self._raw = []
+            self._raw_left = int(seconds * PPK_SAMPLE_RATE)
+        deadline = time.time() + seconds + 3.0
+        while time.time() < deadline:
+            with self._lock:
+                if self._raw_left <= 0:
+                    break
+            time.sleep(0.05)
+        with self._lock:
+            out, self._raw, self._raw_left = self._raw or [], None, 0
+        return out
 
     def total_samples(self) -> int:
         with self._lock:
@@ -350,6 +367,11 @@ class CurrentSampler:
                     samples, _digital = self.ppk.get_samples(raw)
                     if samples:
                         window.extend(samples)
+                        if self._raw is not None and self._raw_left > 0:
+                            with self._lock:
+                                take = samples[: self._raw_left]
+                                self._raw.extend(take)
+                                self._raw_left -= len(take)
             except Exception as e:
                 if self._fh:
                     self._fh.write(json.dumps({"ts": time.time(), "error": str(e), "phase": window_phase}) + "\n")
