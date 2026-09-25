@@ -2,7 +2,8 @@
 
 Rules match PS-CB-NA observe_uplink_cycles:
   - upload_ok + later Failed to send / TCP close = false-positive teardown
-  - CSQ=99 or fail without upload_ok = real radio fail
+  - CSQ=99 / "Signal Strength:99", an openfw "SUM ... res=fail", or fail without
+    upload_ok = real radio fail
 """
 from __future__ import annotations
 
@@ -25,8 +26,14 @@ MARKERS: List[Tuple[str, re.Pattern[str]]] = [
     ("subscribe_ok", re.compile(r"Subscribe\s+(OK|success)|subscribe.*success", re.I)),
     ("failed_send", re.compile(r"Failed to send", re.I)),
     ("failed_tcp_close", re.compile(r"Failed to close TCP", re.I)),
-    ("csq_99", re.compile(r"CSQ[=:\s]+99\b|CSQ:\s*99\b", re.I)),
-    ("upload_start", re.compile(r"\*+Start of upload\*+|Start of upload", re.I)),
+    # stock and openfw both print "Signal Strength:99" when attach fails
+    ("csq_99", re.compile(r"CSQ[=:\s]+99\b|CSQ:\s*99\b|Signal Strength:99\b", re.I)),
+    # openfw explicit failure markers (per-cycle summary, retry backoff, recovery ladder)
+    ("sum_fail", re.compile(r"\]SUM .*\bres=fail\b")),
+    ("uplink_retry", re.compile(r"Uplink failed \d+ time\(s\) in a row", re.I)),
+    ("recovery_step", re.compile(r"Recovery step \d+/\d+", re.I)),
+    # the firmware prints "*****Upload start:N*****" (stock and openfw)
+    ("upload_start", re.compile(r"Upload start|\*+Start of upload\*+|Start of upload", re.I)),
     ("upload_end", re.compile(r"\*+End of upload\*+|End of upload|power-off successful", re.I)),
 ]
 
@@ -41,7 +48,7 @@ def classify(cycle: Dict[str, Any], *, mqtt_msg: bool = False) -> str:
     ok = cycle.get("upload_ok") is not None or mqtt_msg or cycle.get("mqtt_uplink") is not None
     fail = cycle.get("failed_send") is not None
     tcp = cycle.get("failed_tcp_close") is not None
-    csq99 = cycle.get("csq_99") is not None
+    csq99 = cycle.get("csq_99") is not None or cycle.get("sum_fail") is not None
     mqtt = cycle.get("mqtt_connect") is not None or mqtt_msg or cycle.get("mqtt_uplink") is not None
 
     if cycle.get("upload_ok") is not None and (fail or tcp):
