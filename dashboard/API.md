@@ -156,6 +156,15 @@ Reading = {"t": "...", "source": "uplink"|"clocklog", "idc_ma": 3.962, "vdc_v": 
 
 `DELETE /api/v1/devices/{id}/sensors/{sensor_id}` (write) → 204
 
+Implementation notes (v1):
+
+- `next_cursor` is set only when more rows actually follow
+- `1h`/`1d`: `limit` caps rows, `cursor` is ignored, `next_cursor` is always null
+- 422 bodies are FastAPI's standard `{"detail": [ {loc, msg, type}, ... ]}` (a list, not a string)
+- `PUT` sensor: omitted `valid_from` keeps the existing value; everything else is a full replace
+- health 503 body: `{"status":"error","db":"error","last_uplink_at":null,"detail":"database unavailable"}`
+- any route returns 503 `{"detail":"database unavailable"}` when the DB is unreachable
+
 OpenAPI: `/api/openapi.json`, docs at `/api/docs` (API routes only; HTML routes
 are `include_in_schema=False`).
 
