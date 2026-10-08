@@ -78,7 +78,9 @@ View `readings_scaled`: every `readings` row joined (LATERAL, latest
 Reading time rules (ingest):
 
 - uplink sample: payload `time`; fall back to `received_at` when missing or before 2020-01-01
-- clock-log samples: keys `"1"`, `"2"`, ... → `[idc_mA, vdc_V, "time"]`; skip entries with a missing/pre-2020 time
+- clock-log samples: keys `"1"`, `"2"`, ... → `[idc_mA, vdc_V, "time"]` (probe variants: `[idc_mA, vdc_V, converted, "time"]`; the time is the last element); skip entries with a missing/pre-2020 time
+- an uplink with no sensor values stores no `uplink` reading row
+- LTC2 temperatures are stored raw; the API serves values <= -300 (sentinels -327.6 probe open, -983.0 converter missing) as null
 
 Device identity rules (ingest):
 
@@ -112,7 +114,7 @@ Device = {
   "first_seen_at": "...", "last_seen_at": "...",
   "status": "ok" | "stale" | "never-seen",       // STALE_AFTER_HOURS
   "battery_v": 3.512 | null, "signal_csq": 13 | null,   // latest kind='uplink'
-  "fw_version": "openfw-0.3.2" | null,          // latest non-null uplinks.fw_version
+  "fw_version": "openfw-0.3.2" | null,          // newest of: status rows, uplinks with a version, ota rows with result applied|restored
   "last_ota": {"t": "...", "result": "applied", "version": "openfw-0.3.2", "info": null} | null,
   "sensor": Sensor | null,                      // currently valid calibration
   "latest": Reading | null                      // newest readings_scaled row
