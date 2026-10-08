@@ -42,6 +42,8 @@ class Settings:
     basic_auth_password: str
     messages_per_device: int
     refresh_seconds: int
+    api_token_rw: str = ""
+    api_token_ro: str = ""
 
 
 def load_settings(*, ingest_defaults: bool = False) -> Settings:
@@ -82,4 +84,22 @@ def load_settings(*, ingest_defaults: bool = False) -> Settings:
         basic_auth_password=os.environ.get("BASIC_AUTH_PASSWORD", ""),
         messages_per_device=int(os.environ.get("MESSAGES_PER_DEVICE", "50")),
         refresh_seconds=int(os.environ.get("REFRESH_SECONDS", "60")),
+        api_token_rw=os.environ.get("API_TOKEN_RW", "").strip(),
+        api_token_ro=os.environ.get("API_TOKEN_RO", "").strip(),
     )
+
+
+_cached: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Process-wide web settings (loaded once; see reset_settings for tests)."""
+    global _cached
+    if _cached is None:
+        _cached = load_settings(ingest_defaults=False)
+    return _cached
+
+
+def reset_settings() -> None:
+    global _cached
+    _cached = None

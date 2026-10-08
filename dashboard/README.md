@@ -1,13 +1,13 @@
 # Dragino fleet dashboard (v1)
 
-Read-only observability UI + MQTT→Postgres ingest for the Railway Mosquitto broker.
+Fleet UI + JSON API + MQTT→Postgres ingest for the Railway Mosquitto broker.
 
 ## Services
 
 | Service | Role | Start |
 |---------|------|-------|
 | `ingest` | Subscribe `dragino/+/up`, write Postgres | `SERVICE_MODE=ingest` |
-| `web` | Basic Auth fleet UI | `SERVICE_MODE=web` (default) |
+| `web` | Basic Auth fleet UI (HTML) + bearer-token JSON API (`/api/v1`) | `SERVICE_MODE=web` (default) |
 
 Both use this directory’s Dockerfile. Set `SERVICE_MODE` per Railway service.
 
@@ -24,7 +24,9 @@ Both use this directory’s Dockerfile. Set `SERVICE_MODE` per Railway service.
 | `INGEST_STALL_SECONDS` | ingest | Default `1800`. Exit 1 when persists have been failing this long while messages keep arriving |
 | `STALE_AFTER_HOURS` | web | Default `24` |
 | `BASIC_AUTH_USER` | web | Default `admin` |
-| `BASIC_AUTH_PASSWORD` | web | Required |
+| `BASIC_AUTH_PASSWORD` | web | Required for the HTML UI |
+| `API_TOKEN_RW` | web | Bearer token, read + write. With neither token set the API answers 503 |
+| `API_TOKEN_RO` | web | Optional bearer token, read only (write routes answer 403) |
 | `MESSAGES_PER_DEVICE` | web | Default `50` |
 | `REFRESH_SECONDS` | web | Default `60` |
 | `SERVICE_MODE` | runtime | `ingest` or `web` |
@@ -84,6 +86,36 @@ PYTHONPATH=. uvicorn dashboard.web:app --reload --port 8000  # terminal 2
 ```
 
 Open http://127.0.0.1:8000 — browser prompts for Basic Auth.
+
+## JSON API
+
+Contract: [API.md](API.md). Interactive docs at `/api/docs`, schema at
+`/api/openapi.json` (API routes only). Set `API_TOKEN_RW` / `API_TOKEN_RO` on the
+`web` service; `/api/v1/health` needs no token.
+
+```bash
+export TOKEN=<API_TOKEN_RO or API_TOKEN_RW>
+curl -H "Authorization: Bearer $TOKEN" https://<web-domain>/api/v1/devices
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://<web-domain>/api/v1/devices/ps-cb-869181074164029/readings?bucket=1h&from=2026-10-01T00:00:00Z"
+curl -X POST -H "Authorization: Bearer $TOKEN_RW" -H 'Content-Type: application/json' \
+  -d '{"unit":"m","range_low":0,"range_high":10}' \
+  https://<web-domain>/api/v1/devices/ps-cb-869181074164029/sensors
+```
+
+`/healthz` (Railway healthcheck) and `/api/v1/health` run a real DB query and
+answer 503 when it fails. A database connection is opened per request and
+closed afterwards; the web service keeps no long-lived connection.
+
+## Tests
+
+```bash
+# Postgres: podman container telemetry-pg on 127.0.0.1:55432
+PYTHONPATH=. .venv/bin/python -m pytest dashboard/tests -q
+```
+
+The API/web tests use database `dragino_api` (tables truncated per test), the
+ingest tests `dragino_ingest`.
 
 ## Railway
 
