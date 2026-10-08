@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -318,7 +319,9 @@ def main() -> int:
         log.exception("cannot open database at startup")
         return 1
 
-    client = _make_client(f"dashboard-ingest-{os.getpid()}")
+    # pid alone is 1 in every container: during a rolling deploy the old and new
+    # containers then share a client id and the broker keeps kicking one of them.
+    client = _make_client(f"dashboard-ingest-{socket.gethostname()}-{os.getpid()}")
     if settings.mqtt_user and settings.mqtt_pass:
         client.username_pw_set(settings.mqtt_user, settings.mqtt_pass)
     worker = IngestWorker(guard, client)
