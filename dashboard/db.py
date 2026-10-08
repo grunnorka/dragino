@@ -32,6 +32,79 @@ CREATE TABLE IF NOT EXISTS uplinks (
 
 CREATE INDEX IF NOT EXISTS uplinks_device_received_idx
     ON uplinks (device_id, received_at DESC);
+
+-- v1 telemetry (see API.md §1)
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS label TEXT;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS imei TEXT;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS model TEXT;
+
+ALTER TABLE uplinks ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'uplink';
+ALTER TABLE uplinks ADD COLUMN IF NOT EXISTS fw_version TEXT;
+CREATE INDEX IF NOT EXISTS uplinks_device_kind_received_idx
+    ON uplinks (device_id, kind, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS readings (
+    device_id TEXT NOT NULL REFERENCES devices(id),
+    t TIMESTAMPTZ NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('uplink', 'clocklog')),
+    idc_ma DOUBLE PRECISION,
+    vdc_v DOUBLE PRECISION,
+    temp1_c DOUBLE PRECISION,
+    temp2_c DOUBLE PRECISION,
+    uplink_id BIGINT REFERENCES uplinks(id) ON DELETE SET NULL,
+    PRIMARY KEY (device_id, t)
+);
+
+CREATE TABLE IF NOT EXISTS sensors (
+    id BIGSERIAL PRIMARY KEY,
+    device_id TEXT NOT NULL REFERENCES devices(id),
+    valid_from TIMESTAMPTZ NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'idc' CHECK (channel IN ('idc', 'vdc')),
+    kind TEXT NOT NULL DEFAULT 'level',
+    unit TEXT NOT NULL,
+    in_low DOUBLE PRECISION NOT NULL DEFAULT 4,
+    in_high DOUBLE PRECISION NOT NULL DEFAULT 20,
+    range_low DOUBLE PRECISION NOT NULL,
+    range_high DOUBLE PRECISION NOT NULL,
+    "offset" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    label TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (device_id, valid_from),
+    CHECK (in_high <> in_low)
+);
+
+CREATE OR REPLACE VIEW readings_scaled AS
+SELECT
+    r.device_id,
+    r.t,
+    r.source,
+    r.idc_ma,
+    r.vdc_v,
+    r.temp1_c,
+    r.temp2_c,
+    r.uplink_id,
+    s.id AS sensor_id,
+    s.kind,
+    s.unit,
+    s.range_low
+        + ((CASE s.channel WHEN 'vdc' THEN r.vdc_v ELSE r.idc_ma END) - s.in_low)
+          / (s.in_high - s.in_low) * (s.range_high - s.range_low)
+        + s."offset" AS value,
+    CASE
+        WHEN r.idc_ma IS NULL THEN NULL
+        WHEN r.idc_ma < 0.5 THEN 'no_signal'
+        WHEN r.idc_ma < 3.6 OR r.idc_ma > 21.0 THEN 'fault'
+        WHEN r.idc_ma < 3.8 OR r.idc_ma > 20.5 THEN 'saturated'
+        ELSE 'ok'
+    END AS quality
+FROM readings r
+LEFT JOIN LATERAL (
+    SELECT *
+    FROM sensors
+    WHERE sensors.device_id = r.device_id AND sensors.valid_from <= r.t
+    ORDER BY sensors.valid_from DESC
+    LIMIT 1
+) s ON TRUE;
 """
 
 
