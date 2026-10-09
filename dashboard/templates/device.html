@@ -1,103 +1,150 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="{{ refresh_seconds }}">
-  <title>{{ device.id }} · Dragino</title>
-  <style>
-    :root {
-      --bg: #0f1419;
-      --panel: #1a222c;
-      --text: #e7ecf1;
-      --muted: #8b98a5;
-      --ok: #3d9a5f;
-      --stale: #c48a2a;
-      --never: #8a4b4b;
-      --line: #2a3542;
-      --accent: #5b8def;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      background: radial-gradient(1200px 600px at 90% -10%, #1c2a3a 0%, var(--bg) 55%);
-      color: var(--text);
-      min-height: 100vh;
-    }
-    main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
-    h1 { font-size: 1.6rem; font-weight: 600; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
-    .sub { color: var(--muted); margin: 0 0 1.25rem; font-size: 0.95rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .meta { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin-bottom: 1.5rem; color: var(--muted); font-size: 0.92rem; }
-    .meta strong { color: var(--text); font-weight: 600; }
-    .pill {
-      display: inline-block;
-      padding: 0.15rem 0.55rem;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-    }
-    .ok { background: color-mix(in srgb, var(--ok) 25%, transparent); color: #9be0b3; }
-    .stale { background: color-mix(in srgb, var(--stale) 25%, transparent); color: #f0d08a; }
-    .never-seen { background: color-mix(in srgb, var(--never) 30%, transparent); color: #efb0b0; }
-    article {
-      background: color-mix(in srgb, var(--panel) 88%, transparent);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 1rem 1.1rem;
-      margin-bottom: 1rem;
-    }
-    article header {
-      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
-      color: var(--muted); font-size: 0.85rem; margin-bottom: 0.65rem;
-    }
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 0.82rem;
-      line-height: 1.45;
-      color: #d5dde6;
-    }
-    .empty { color: var(--muted); }
-  </style>
-</head>
-<body>
-  <main>
+{% extends "base.html" %}
+{% block title %}{{ device.label or device.id }} · Dragino{% endblock %}
+{% block content %}
     <p><a href="/">← Fleet</a></p>
-    <h1>{{ device.id }}</h1>
+    <h1>{{ device.label or device.id }}</h1>
     <p class="sub">
-      <span class="pill {{ status }}">{{ status }}</span>
-      · last {{ limit }} uplinks · refresh {{ refresh_seconds }}s · {{ now|fmt_dt }}
+      <span class="pill {{ device.status }}">{{ device.status }}</span>
+      {% if device.label %}· {{ device.id }}{% endif %}
+      · {{ now|fmt_dt }} · reload for fresh data
     </p>
+
+    {% if notice %}<div class="banner good" role="status">{{ notice }}</div>{% endif %}
+    {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+
+    <div class="cards">
+      <div class="card"><div class="k">Latest</div><div class="v">
+        {% if device.latest %}
+          {% if device.latest.value is not none %}{{ device.latest.value|num }} {{ device.latest.unit or '' }}
+          {% elif device.latest.idc_ma is not none %}{{ '%.3f'|format(device.latest.idc_ma) }} mA
+          {% else %}—{% endif %}
+          {% if device.latest.quality %}<span class="badge {{ device.latest.quality }}">{{ device.latest.quality|quality_label }}</span>{% endif %}
+        {% else %}—{% endif %}
+      </div></div>
+      <div class="card"><div class="k">Battery</div><div class="v">{% if device.battery_v is not none %}{{ '%.3f'|format(device.battery_v) }} V{% else %}—{% endif %}</div></div>
+      <div class="card"><div class="k">Signal (CSQ)</div><div class="v">{% if device.signal_csq is not none %}{{ device.signal_csq }}{% else %}—{% endif %}</div></div>
+      <div class="card"><div class="k">Firmware</div><div class="v">{{ device.fw_version or '—' }}</div></div>
+      <div class="card"><div class="k">Last seen</div><div class="v" style="font-size:0.95rem">{{ device.last_seen_at|fmt_dt }}<div class="muted" style="font-size:0.8rem">{{ device.last_seen_at|ago }}</div></div></div>
+    </div>
     <div class="meta">
-      <div>Created via <strong>{{ device.created_via }}</strong></div>
+      <div>Model <strong>{{ device.model or '—' }}</strong></div>
+      <div>IMEI <strong>{{ device.imei or '—' }}</strong></div>
       <div>First seen <strong>{{ device.first_seen_at|fmt_dt }}</strong></div>
-      <div>Last seen <strong>{{ device.last_seen_at|fmt_dt }}</strong></div>
-      <div>Battery <strong>{% if battery is not none %}{{ '%.3f'|format(battery) }} V{% else %}—{% endif %}</strong></div>
-      <div>Signal <strong>{% if signal is not none %}{{ '%.0f'|format(signal) }}{% else %}—{% endif %}</strong></div>
-      <div>Model <strong>{{ model or '—' }}</strong></div>
+      <div>Created via <strong>{{ device.created_via }}</strong></div>
+      {% if device.last_ota %}
+      <div>Last OTA <strong>{{ device.last_ota.result or '—' }}{% if device.last_ota.version %} {{ device.last_ota.version }}{% endif %}</strong> ({{ device.last_ota.t|fmt_dt }})</div>
+      {% endif %}
     </div>
 
-    {% if uplinks %}
-      {% for u in uplinks %}
-      <article>
-        <header>
-          <span>#{{ u.id }}</span>
-          <span>{{ u.received_at|fmt_dt }}</span>
-          <span>{{ u.topic }}</span>
-          {% if u.battery is not none %}<span>batt {{ '%.3f'|format(u.battery) }} V</span>{% endif %}
-          {% if u.signal is not none %}<span>sig {{ '%.0f'|format(u.signal) }}</span>{% endif %}
-        </header>
-        <pre>{{ u.payload_pretty }}</pre>
-      </article>
-      {% endfor %}
+    <h2>History</h2>
+    <div class="tabs">
+      {% for r in ranges %}<a href="/devices/{{ device.id|urlencode }}?range={{ r }}" class="{{ 'on' if r == range_key else '' }}">{{ r }}</a>{% endfor %}
+    </div>
+    {% if chart %}
+    <div class="cards">
+      <div class="card"><div class="k">Min</div><div class="v">{{ chart.min|num }} {{ chart.unit }}</div></div>
+      <div class="card"><div class="k">Max</div><div class="v">{{ chart.max|num }} {{ chart.unit }}</div></div>
+      <div class="card"><div class="k">Latest</div><div class="v">{{ chart.latest|num }} {{ chart.unit }}{% if chart.latest_q and chart.latest_q != 'ok' %} <span class="badge {{ chart.latest_q }}">{{ chart.latest_q|quality_label }}</span>{% endif %}</div></div>
+    </div>
+    <div class="chartbox">
+      {{ chart.svg|safe }}
+      <div class="legend">
+        <span>UTC · {{ chart.n }} {{ 'hourly averages' if chart.bucket == '1h' else 'samples' }}{% if chart.downsampled %} (too many samples, shown hourly){% endif %}{% if not chart.calibrated %} · uncalibrated, raw mA{% endif %}</span>
+        <span><span class="dot" style="background:var(--q-sat)"></span>saturated</span>
+        <span><span class="dot" style="background:var(--q-fault)"></span>fault</span>
+        <span><span class="dot" style="background:var(--q-none)"></span>no signal</span>
+        <span>min/max over good samples · lines break at gaps and bad samples</span>
+      </div>
+    </div>
     {% else %}
-      <p class="empty">No uplinks stored yet for this device.</p>
+    <p class="muted">No readings in the last {{ range_key }}.</p>
     {% endif %}
-  </main>
-</body>
-</html>
+
+    <h2>Firmware &amp; downlink events</h2>
+    {% if events %}
+    <div class="wrap"><table>
+      <thead><tr><th>Time</th><th>Kind</th><th>Result</th><th>Version</th><th>Info</th></tr></thead>
+      <tbody>
+      {% for e in events %}
+        <tr>
+          <td class="num">{{ e.t|fmt_dt }}</td>
+          <td><span class="badge kind">{{ e.kind }}</span></td>
+          <td>{{ e.result or '—' }}</td>
+          <td>{{ e.version or '—' }}</td>
+          <td class="wrapok">{{ e.info or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted">No OTA, downlink or status events yet.</p>
+    {% endif %}
+
+    <h2 id="calibration">Calibration</h2>
+    {% if sensors %}
+    <div class="wrap"><table>
+      <thead><tr><th>Valid from (UTC)</th><th>Channel</th><th>Kind</th><th>Unit</th><th>Input</th><th>Range</th><th>Offset</th><th>Label</th></tr></thead>
+      <tbody>
+      {% for s in sensors %}
+        <tr>
+          <td class="num">{{ s.valid_from|fmt_min }}</td>
+          <td>{{ s.channel }}</td>
+          <td>{{ s.kind }}</td>
+          <td>{{ s.unit }}</td>
+          <td class="num">{{ s.in_low|num }}–{{ s.in_high|num }} {{ 'V' if s.channel == 'vdc' else 'mA' }}</td>
+          <td class="num">{{ s.range_low|num }}–{{ s.range_high|num }} {{ s.unit }}</td>
+          <td class="num">{{ s.offset|num }}</td>
+          <td>{{ s.label or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted">No calibration yet: readings show raw values only.</p>
+    {% endif %}
+
+    <details style="margin-top:0.9rem">
+      <summary>Add calibration period</summary>
+      <form class="grid" method="post" action="/devices/{{ device.id|urlencode }}/sensors">
+        <label>Valid from (UTC, blank = now)<input type="datetime-local" name="valid_from"></label>
+        <label>Channel<select name="channel"><option value="idc">idc (mA)</option><option value="vdc">vdc (V)</option></select></label>
+        <label>Kind<select name="kind"><option>level</option><option>pressure</option><option>flow</option><option>other</option></select></label>
+        <label>Unit<input name="unit" required maxlength="20" placeholder="m, kPa, bar, l/s"></label>
+        <label>Input low<input name="in_low" inputmode="decimal" value="4"></label>
+        <label>Input high<input name="in_high" inputmode="decimal" value="20"></label>
+        <label>Range low<input name="range_low" inputmode="decimal" required></label>
+        <label>Range high<input name="range_high" inputmode="decimal" required></label>
+        <label>Offset<input name="offset" inputmode="decimal" value="0"></label>
+        <label>Label<input name="label" maxlength="120"></label>
+        <div><button type="submit">Add period</button></div>
+      </form>
+    </details>
+
+    <h2>Label</h2>
+    <form class="row" method="post" action="/devices/{{ device.id|urlencode }}/label">
+      <label>Display name<input name="label" value="{{ device.label or '' }}" maxlength="120" placeholder="{{ device.id }}"></label>
+      <button type="submit">Save</button>
+    </form>
+
+    <h2>Raw uplinks <span class="muted" style="font-weight:400">(last {{ limit }})</span></h2>
+    {% if uplinks %}
+    <div class="wrap"><table>
+      <thead><tr><th>#</th><th>Received</th><th>Kind</th><th>Battery</th><th>Signal</th><th>Firmware</th><th>Payload</th></tr></thead>
+      <tbody>
+      {% for u in uplinks %}
+        <tr>
+          <td class="num">{{ u.id }}</td>
+          <td class="num">{{ u.received_at|fmt_dt }}</td>
+          <td><span class="badge kind">{{ u.kind }}</span></td>
+          <td class="num">{% if u.battery is not none %}{{ '%.3f'|format(u.battery) }} V{% else %}—{% endif %}</td>
+          <td class="num">{% if u.signal is not none %}{{ u.signal }}{% else %}—{% endif %}</td>
+          <td>{{ u.fw_version or '—' }}</td>
+          <td class="wrapok"><details><summary>{{ u.topic }}</summary><pre>{{ u.payload_pretty }}</pre></details></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted">No uplinks stored yet for this device.</p>
+    {% endif %}
+{% endblock %}
